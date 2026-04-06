@@ -165,7 +165,7 @@ function renderHeader(activePage) {
     { id: 'tareas', label: 'Tareas', href: 'tareas.html', dot: pendTareas > 0 },
     { id: 'gestoria', label: 'Gestoría', href: 'gestoria.html' },
     { id: 'peritaje', label: 'Peritaje', href: 'peritaje.html' },
-    { id: 'estadisticas', label: 'Estadísticas', href: 'estadisticas.html' },
+  
   ];
   const navLinks = pages.map(p => {
     const isActive = p.id === activePage;
