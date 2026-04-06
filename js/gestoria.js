@@ -60,6 +60,24 @@ function gestoriaBadge(car) {
 }
  
 /* ═══════════════════════════════════════════════════════════════
+   SOLICITAR TURNO DESDE GESTORÍA
+   Redirige a alertas.html con tipo "Turno" preseleccionado
+   ═══════════════════════════════════════════════════════════════ */
+ 
+function solicitarTurnoDesdeGestoria(carId, itemKey, itemLabel) {
+  const car = S.cars.find(c => c.id === carId);
+  const contexto = {
+    tipo: 'turno',
+    titulo: 'Solicitar turno',
+    info: car
+      ? `Gestoría · ${car.brand} ${car.model} ${car.year}${car.patente ? ' · ' + car.patente : ''} · ${itemLabel}`
+      : itemLabel,
+  };
+  sessionStorage.setItem('alertas_prefill', JSON.stringify(contexto));
+  window.location.href = 'alertas.html';
+}
+ 
+/* ═══════════════════════════════════════════════════════════════
    MODAL EDITAR GESTORÍA (checklist interactivo)
    ═══════════════════════════════════════════════════════════════ */
  
@@ -119,12 +137,14 @@ function renderGestoriaModal() {
         </div>
         ${item.desc ? `<div style="font-size:11px;color:var(--text-3);margin-bottom:10px">${esc(item.desc)}</div>` : ''}
  
-        <div style="display:flex;align-items:center;gap:6px;margin-bottom:7px">
-          <span style="font-size:10px;color:var(--text-3);text-transform:uppercase;letter-spacing:.06em">Fecha:</span>
-          <input type="date" value="${iv.fecha || ''}"
-            onchange="setItemFecha('${item.key}',this.value)"
-            style="font-size:12px;padding:4px 8px;background:var(--surface);border:1px solid var(--border-md);border-radius:var(--radius-sm);color:var(--text);font-family:var(--font);width:145px">
+        <!-- BOTÓN SOLICITAR TURNO: visible solo cuando el ítem NO está chequeado -->
+        <div data-btn-turno style="margin-bottom:7px;display:${checked ? 'none' : 'block'}">
+          <button class="btn sm" onclick="solicitarTurnoDesdeGestoria('${car.id}','${item.key}','${esc(item.label)}')"
+            style="font-size:11px;padding:4px 12px;display:inline-flex;align-items:center;gap:5px">
+            📅 Solicitar turno
+          </button>
         </div>
+ 
         <input type="text" placeholder="Observación (opcional)…" value="${esc(iv.obs || '')}"
           onchange="setItemObs('${item.key}',this.value)"
           style="width:100%;font-size:12px;padding:6px 10px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-sm);color:var(--text);font-family:var(--font)">
@@ -164,20 +184,6 @@ function renderGestoriaModal() {
       <!-- Cuerpo scrolleable -->
       <div style="padding:1.25rem 1.75rem;overflow-y:auto;flex:1">
  
-        <!-- Fechas de inicio / cierre -->
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:1.25rem">
-          <div>
-            <label style="font-size:10px;color:var(--text-3);text-transform:uppercase;letter-spacing:.07em;display:block;margin-bottom:5px">Fecha inicio gestoría</label>
-            <input type="date" value="${g.fechaInicio || ''}" onchange="setGestoriaFechaInicio(this.value)"
-              style="width:100%;font-size:13px;padding:7px 10px;background:var(--surface-2);border:1px solid var(--border-md);border-radius:var(--radius);color:var(--text);font-family:var(--font)">
-          </div>
-          <div>
-            <label style="font-size:10px;color:var(--text-3);text-transform:uppercase;letter-spacing:.07em;display:block;margin-bottom:5px">Fecha cierre / entrega</label>
-            <input type="date" value="${g.fechaCierre || ''}" onchange="setGestoriaFechaCierre(this.value)"
-              style="width:100%;font-size:13px;padding:7px 10px;background:var(--surface-2);border:1px solid var(--border-md);border-radius:var(--radius);color:var(--text);font-family:var(--font)">
-          </div>
-        </div>
- 
         <!-- Título checklist -->
         <div style="font-size:10px;text-transform:uppercase;letter-spacing:.1em;color:var(--text-3);font-weight:600;margin-bottom:10px">
           Documentación requerida &nbsp;·&nbsp; <span style="color:var(--text-3);font-weight:400;text-transform:none;letter-spacing:0">hacé clic en cada ítem para marcarlo</span>
@@ -196,7 +202,6 @@ function renderGestoriaModal() {
       <!-- Footer fijo -->
       <div style="padding:1rem 1.75rem;border-top:1px solid var(--border);flex-shrink:0;display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap">
         <span style="font-size:12px;color:var(--text-3)">Los cambios se guardan automáticamente.</span>
-        <button class="btn" onclick="closeGestoriaModal()">Cerrar</button>
       </div>
     </div>
   </div>`;
@@ -223,14 +228,20 @@ function toggleItem(key) {
   if (row) {
     row.style.border = '1px solid ' + (checked ? 'rgba(76,175,125,0.25)' : 'var(--border)');
     row.style.background = checked ? 'rgba(76,175,125,0.04)' : 'var(--surface-2)';
+ 
     const checkbox = row.querySelector('[data-checkbox]');
     if (checkbox) {
       checkbox.style.background = checked ? 'var(--green)' : 'var(--surface-3)';
       checkbox.style.border = '2px solid ' + (checked ? 'var(--green)' : 'var(--border-md)');
       checkbox.textContent = checked ? '✓' : '';
     }
+ 
     const label = row.querySelector('[data-label]');
     if (label) label.style.color = checked ? 'var(--green)' : 'var(--text)';
+ 
+    // Ocultar botón al chequear, mostrar al deschequear
+    const btnTurno = row.querySelector('[data-btn-turno]');
+    if (btnTurno) btnTurno.style.display = checked ? 'none' : 'block';
   }
  
   // Actualizar barra de progreso y contador en el header del modal
@@ -245,15 +256,6 @@ function toggleItem(key) {
   if (verGestoriaId) renderVerGestoria();
 }
  
-function setItemFecha(key, val) {
-  const car = S.cars.find(c => c.id === gestoriaCarId);
-  if (!car) return;
-  const g = getGestoria(car);
-  if (!g.items[key]) g.items[key] = { checked: false, fecha: '', obs: '' };
-  g.items[key].fecha = val;
-  save();
-}
- 
 function setItemObs(key, val) {
   const car = S.cars.find(c => c.id === gestoriaCarId);
   if (!car) return;
@@ -263,16 +265,6 @@ function setItemObs(key, val) {
   save();
 }
  
-function setGestoriaFechaInicio(val) {
-  const car = S.cars.find(c => c.id === gestoriaCarId);
-  if (!car) return;
-  getGestoria(car).fechaInicio = val; save();
-}
-function setGestoriaFechaCierre(val) {
-  const car = S.cars.find(c => c.id === gestoriaCarId);
-  if (!car) return;
-  getGestoria(car).fechaCierre = val; save();
-}
 function setGestoriaNotas(val) {
   const car = S.cars.find(c => c.id === gestoriaCarId);
   if (!car) return;
@@ -292,7 +284,7 @@ function marcarTodosListo() {
   save();
   renderGestoriaModal();
   renderVehiculosList();
-  if (verGestoriaId) renderVerGestoria(); // ← FIX: sincroniza el modal de Ver si está abierto
+  if (verGestoriaId) renderVerGestoria();
   toast('Todos los ítems marcados como listos', 'success');
 }
  
@@ -343,7 +335,6 @@ function renderVerGestoria() {
         <span style="font-size:13px;color:${checked ? 'var(--text)' : 'var(--text-3)'};font-weight:${checked ? '500' : '400'}">${esc(item.label)}</span>
         ${iv.obs ? `<div style="font-size:11px;color:var(--text-3);margin-top:2px;font-style:italic">"${esc(iv.obs)}"</div>` : ''}
       </div>
-      ${iv.fecha ? `<span style="font-size:11px;color:var(--text-3);flex-shrink:0">${iv.fecha}</span>` : ''}
       <span style="font-size:10px;font-weight:600;flex-shrink:0;padding:2px 8px;border-radius:100px;
         background:${checked ? 'var(--green-bg)' : 'var(--surface-3)'};
         color:${checked ? 'var(--green)' : 'var(--text-3)'};
@@ -387,12 +378,6 @@ function renderVerGestoria() {
             </div>
           </div>
         </div>
- 
-        ${g.fechaInicio || g.fechaCierre ? `
-        <div style="margin-top:10px;display:flex;gap:16px;flex-wrap:wrap">
-          ${g.fechaInicio ? `<span style="font-size:11px;color:var(--text-3)">Inicio: <strong style="color:var(--text-2)">${g.fechaInicio}</strong></span>` : ''}
-          ${g.fechaCierre ? `<span style="font-size:11px;color:var(--text-3)">Cierre: <strong style="color:var(--text-2)">${g.fechaCierre}</strong></span>` : ''}
-        </div>` : ''}
       </div>
  
       <!-- Cuerpo -->
@@ -465,22 +450,6 @@ function renderVehiculosList() {
   if (gFilterStatus === 'completa')    filtered = cars.filter(c => c.gestoria?.estado === 'completa');
  
   let html = `
-  <!-- Métricas -->
-  <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:1.25rem">
-    <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);padding:1rem 1.2rem;text-align:center">
-      <div style="font-family:var(--font-display);font-size:26px;font-weight:600;color:var(--text-3)">${sinIniciar}</div>
-      <div style="font-size:10px;text-transform:uppercase;letter-spacing:.08em;color:var(--text-3);margin-top:2px">Sin iniciar</div>
-    </div>
-    <div style="background:var(--surface);border:1px solid rgba(224,144,85,0.2);border-radius:var(--radius-lg);padding:1rem 1.2rem;text-align:center">
-      <div style="font-family:var(--font-display);font-size:26px;font-weight:600;color:var(--orange)">${enProceso}</div>
-      <div style="font-size:10px;text-transform:uppercase;letter-spacing:.08em;color:var(--orange);margin-top:2px">En proceso</div>
-    </div>
-    <div style="background:var(--surface);border:1px solid var(--green-border);border-radius:var(--radius-lg);padding:1rem 1.2rem;text-align:center">
-      <div style="font-family:var(--font-display);font-size:26px;font-weight:600;color:var(--green)">${completa}</div>
-      <div style="font-size:10px;text-transform:uppercase;letter-spacing:.08em;color:var(--green);margin-top:2px">Completa</div>
-    </div>
-  </div>
- 
   <!-- Filtros -->
   <div style="display:flex;gap:6px;margin-bottom:1rem;flex-wrap:wrap">
     <button class="btn sm${gFilterStatus===''?' primary':''}" onclick="gFilterStatus='';renderVehiculosList()">Todos (${cars.length})</button>
@@ -740,3 +709,4 @@ function render() {
 /* ── Boot ── */
 bootApp('gestoria');
 render();
+ 

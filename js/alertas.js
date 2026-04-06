@@ -4,32 +4,28 @@
      · Alertas manuales (igual que antes)
      · Sección automática de tareas próximas (hoy + 48 h)
      · Sección automática de cumpleaños de clientes (hoy + 7 días)
+     · Prefill automático desde Gestoría (botón "Solicitar turno")
    ═══════════════════════════════════════════════════════════════ */
-
+ 
 let addAlertaOpen = false;
 let activeTab     = 'activas';
 let alertasSort   = 'proximas'; // 'proximas' | 'recientes'
-
+ 
+/* Prefill que viene de gestoría.js vía sessionStorage */
+let _prefillTurno = null;
+ 
 const ICON_MAP  = { birthday:'🎉', itv:'⚠️', turno:'📅', general:'🔔' };
 const COLOR_MAP = { birthday:'purple', itv:'red', turno:'gold', general:'blue' };
-
+ 
 /* ── Helpers de fecha (locales para no depender del orden de carga) ── */
-
-/**
- * Diferencia en días enteros entre HOY (00:00) y una fecha ISO.
- * Negativo = pasada, 0 = hoy, positivo = futura.
- */
+ 
 function _diffDays(isoDate) {
   if (!isoDate) return null;
   const hoy   = new Date(); hoy.setHours(0, 0, 0, 0);
   const fecha = new Date(isoDate + 'T00:00:00');
   return Math.round((fecha - hoy) / (1000 * 60 * 60 * 24));
 }
-
-/**
- * Calcula la edad a partir de una fecha de nacimiento ISO.
- * Devuelve null si no se puede calcular.
- */
+ 
 function _calcEdad(fechaNac) {
   if (!fechaNac) return null;
   const hoy  = new Date();
@@ -39,12 +35,7 @@ function _calcEdad(fechaNac) {
   if (m < 0 || (m === 0 && hoy.getDate() < nac.getDate())) edad--;
   return edad >= 0 ? edad : null;
 }
-
-/**
- * Días hasta el próximo cumpleaños (0 = hoy, 1 = mañana, etc.)
- * Utiliza la función daysUntil de app.js si está disponible,
- * pero también puede calcularlo de forma autónoma.
- */
+ 
 function _diasHastaCumple(fechaNac) {
   if (!fechaNac) return null;
   return typeof daysUntil === 'function' ? daysUntil(fechaNac) : _calcDiasHastaCumple(fechaNac);
@@ -55,16 +46,34 @@ function _calcDiasHastaCumple(fechaNac) {
   if (next < n) next.setFullYear(next.getFullYear() + 1);
   return Math.ceil((next - n) / (1000 * 60 * 60 * 24));
 }
-
+ 
 /* ── Carga de tareas desde localStorage ── */
 function _loadTareasAlertas() {
   try {
     return JSON.parse(localStorage.getItem('crm_tareas') || '[]');
   } catch { return []; }
 }
-
+ 
+/* ═══════════════════════════════════════════════════════════════
+   PREFILL DESDE GESTORÍA
+   Lee sessionStorage al cargar la página y abre el formulario
+   con tipo "turno" y la info del vehículo precargada.
+   ═══════════════════════════════════════════════════════════════ */
+ 
+function _checkPrefill() {
+  try {
+    const raw = sessionStorage.getItem('alertas_prefill');
+    if (!raw) return;
+    sessionStorage.removeItem('alertas_prefill');
+    _prefillTurno = JSON.parse(raw);
+    addAlertaOpen = true; // abrir el formulario automáticamente
+  } catch (e) {
+    _prefillTurno = null;
+  }
+}
+ 
 /* ════════════════════════════════════════
-   CRUD — Alertas manuales (sin cambios)
+   CRUD — Alertas manuales
    ════════════════════════════════════════ */
 function addAlerta(e) {
   e.preventDefault();
@@ -79,28 +88,42 @@ function addAlerta(e) {
     done:        false,
     date:        today(),
   });
-  addAlertaOpen = false;
+  addAlertaOpen  = false;
+  _prefillTurno  = null; // limpiar prefill al guardar
   save();
   render();
   toast('Alerta creada', 'success');
 }
-
+ 
 function marcarAlerta(id, done) {
   const a = S.alertas.find(x => x.id === id);
   if (a) a.done = done;
   save(); render();
 }
-
+ 
 function delAlerta(id) {
   if (!confirm('¿Eliminar esta alerta?')) return;
   S.alertas = S.alertas.filter(a => a.id !== id);
   save(); render();
 }
-
+ 
 /* ════════════════════════════════════════
-   FORMULARIO — Nueva alerta (sin cambios)
+   FORMULARIO — Nueva alerta
+   Con soporte para prefill desde gestoría
    ════════════════════════════════════════ */
 function rAlertaForm() {
+  /* Si hay prefill, usarlo para preseleccionar tipo e info */
+  const pTipo  = _prefillTurno?.tipo  || 'general';
+  const pInfo  = _prefillTurno?.info  || '';
+ 
+  /* Opciones del select con el tipo prefillado marcado */
+  const opcionesTipo = [
+    { val: 'general',  label: '🔔 General' },
+    { val: 'birthday', label: '🎉 Cumpleaños' },
+    { val: 'itv',      label: '⚠️ ITV' },
+    { val: 'turno',    label: '📅 Turno' },
+  ].map(o => `<option value="${o.val}"${o.val === pTipo ? ' selected' : ''}>${o.label}</option>`).join('');
+ 
   return `
   <div class="form-section">
     <div class="form-title">Nueva alerta / recordatorio</div>
@@ -108,26 +131,28 @@ function rAlertaForm() {
       <div class="fg2">
         <div class="fg"><label>Tipo</label>
           <select name="tipoAlerta">
-            <option value="general">🔔 General</option>
-            <option value="birthday">🎉 Cumpleaños</option>
-            <option value="itv">⚠️ ITV</option>
-            <option value="turno">📅 Turno</option>
+            ${opcionesTipo}
           </select>
         </div>
         <div class="fg"><label>Fecha</label><input type="date" name="fecha" value="${todayISO()}"></div>
       </div>
-      <div class="fg"><label>Título *</label><input type="text" name="titulo" placeholder="Descripción corta de la alerta" required></div>
-      <div class="fg"><label>Descripción / detalles</label><textarea name="descripcion" placeholder="Información adicional, contexto..."></textarea></div>
+      <div class="fg"><label>Título *</label>
+        <input type="text" name="titulo" placeholder="Descripción corta de la alerta" required
+          value="${pTipo === 'turno' && pInfo ? 'Turno gestoría' : ''}">
+      </div>
+      <div class="fg"><label>Descripción / detalles</label>
+        <textarea name="descripcion" placeholder="Información adicional, contexto...">${pInfo ? esc(pInfo) : ''}</textarea>
+      </div>
       <div style="display:flex;gap:8px;justify-content:flex-end">
-        <button type="button" class="btn" onclick="addAlertaOpen=false;render()">Cancelar</button>
+        <button type="button" class="btn" onclick="addAlertaOpen=false;_prefillTurno=null;render()">Cancelar</button>
         <button type="submit" class="btn primary">Crear alerta</button>
       </div>
     </form>
   </div>`;
 }
-
+ 
 /* ════════════════════════════════════════
-   ITEM — Alerta manual (sin cambios)
+   ITEM — Alerta manual
    ════════════════════════════════════════ */
 function rAlertItem(a) {
   return `
@@ -150,29 +175,24 @@ function rAlertItem(a) {
     </div>
   </div>`;
 }
-
+ 
 /* ════════════════════════════════════════
-   NUEVO — Sección de tareas próximas
+   Sección de tareas próximas
    ════════════════════════════════════════ */
-
-/**
- * Devuelve las tareas pendientes que vencen HOY o en las próximas 48 horas.
- */
 function _getTareasProximas() {
   return _loadTareasAlertas()
     .filter(t => {
       if (t.done) return false;
       const d = _diffDays(t.fecha);
-      return d !== null && d >= 0 && d <= 2; // 0 = hoy, 1 = mañana, 2 = pasado
+      return d !== null && d >= 0 && d <= 2;
     })
     .sort((a, b) => new Date(a.fecha) - new Date(b.fecha));
 }
-
-/** Render de la sección de tareas próximas */
+ 
 function rTareasProximas() {
   const tareas = _getTareasProximas();
   if (tareas.length === 0) return '';
-
+ 
   const items = tareas.map(t => {
     const d     = _diffDays(t.fecha);
     const label = d === 0 ? 'Hoy' : d === 1 ? 'Mañana' : 'En 2 días';
@@ -196,7 +216,7 @@ function rTareasProximas() {
       </div>
     </div>`;
   }).join('');
-
+ 
   return `
   <div style="margin-bottom:1.25rem">
     <div style="font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;
@@ -207,15 +227,10 @@ function rTareasProximas() {
     ${items}
   </div>`;
 }
-
+ 
 /* ════════════════════════════════════════
-   NUEVO — Sección de cumpleaños de clientes
+   Sección de cumpleaños de clientes
    ════════════════════════════════════════ */
-
-/**
- * Devuelve clientes con cumpleaños hoy o en los próximos 7 días,
- * junto con metadata calculada (días, edad).
- */
 function _getCumpleaniosProximos() {
   return S.clients
     .filter(c => c.fechaCumple)
@@ -227,18 +242,17 @@ function _getCumpleaniosProximos() {
     .filter(c => c.diasHasta !== null && c.diasHasta >= 0 && c.diasHasta <= 7)
     .sort((a, b) => a.diasHasta - b.diasHasta);
 }
-
-/** Render de la sección de cumpleaños */
+ 
 function rCumpleanios() {
   const clientes = _getCumpleaniosProximos();
   if (clientes.length === 0) return '';
-
+ 
   const items = clientes.map(c => {
     const esHoy  = c.diasHasta === 0;
     const label  = esHoy ? '¡Hoy!' : c.diasHasta === 1 ? 'Mañana' : `En ${c.diasHasta} días`;
     const badge  = esHoy ? 'bg-purple' : 'bg-blue';
     const edad   = c.edad !== null ? `· Cumple ${c.edad} años` : '';
-
+ 
     return `
     <div class="alert-item${esHoy ? ' birthday-hoy' : ''}">
       <div style="font-size:18px">${esHoy ? '🎁' : '🎂'}</div>
@@ -260,7 +274,7 @@ function rCumpleanios() {
       </div>
     </div>`;
   }).join('');
-
+ 
   return `
   <div style="margin-bottom:1.25rem">
     <div style="font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;
@@ -271,15 +285,14 @@ function rCumpleanios() {
     ${items}
   </div>`;
 }
-
+ 
 /* ════════════════════════════════════════
    RENDER PRINCIPAL
    ════════════════════════════════════════ */
 function render() {
   const pendientes  = S.alertas.filter(a => !a.done);
   const completadas = S.alertas.filter(a =>  a.done);
-
-  /* Resumen rápido de alertas manuales */
+ 
   const tipos = ['birthday', 'itv', 'turno', 'general'];
   const badgesConf = {
     birthday: { clase:'bg-purple', label:(n) => `🎉 ${n} cumpleaños` },
@@ -295,27 +308,26 @@ function render() {
       return `<span class="badge ${b.clase}">${b.label(n)}</span>`;
     })
     .join('');
-
-  /* Conteos para toast de cumpleaños de hoy */
+ 
   const cumpleHoy = _getCumpleaniosProximos().filter(c => c.diasHasta === 0);
-
+ 
   let html = `
   <div class="section-head">
     <div class="section-title">Alertas y recordatorios</div>
-    <button class="btn primary" onclick="addAlertaOpen=true;render()">+ Nueva alerta</button>
+    <button class="btn primary" onclick="addAlertaOpen=true;_prefillTurno=null;render()">+ Nueva alerta</button>
   </div>
-
+ 
   ${addAlertaOpen ? rAlertaForm() : ''}
-
+ 
   <!-- Resumen rápido alertas manuales -->
   ${badgesHtml ? `<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:1rem">${badgesHtml}</div>` : ''}
-
-  <!-- ── NUEVO: cumpleaños próximos (automático desde clientes) ── -->
+ 
+  <!-- Cumpleaños próximos (automático desde clientes) -->
   ${rCumpleanios()}
-
-  <!-- ── NUEVO: tareas próximas (automático desde crm_tareas) ── -->
+ 
+  <!-- Tareas próximas (automático desde crm_tareas) -->
   ${rTareasProximas()}
-
+ 
   <!-- Tabs alertas manuales -->
   <div style="font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;
               color:var(--text-3);margin-bottom:8px;padding-bottom:4px;
@@ -337,7 +349,7 @@ function render() {
       <button class="btn sm${alertasSort==='recientes'?' active':''}" onclick="alertasSort='recientes';render()">🕐 Más recientes</button>
     </div>
   </div>`;
-
+ 
   /* Tab activas */
   if (activeTab === 'activas') {
     if (pendientes.length === 0) {
@@ -350,21 +362,18 @@ function render() {
     } else {
       let sorted;
       if (alertasSort === 'proximas') {
-        // Ordenar por fecha más próxima; sin fecha van al final
         sorted = [...pendientes].sort((a, b) => {
           const fa = a.fecha ? new Date(a.fecha) : new Date('9999-12-31');
           const fb = b.fecha ? new Date(b.fecha) : new Date('9999-12-31');
           return fa - fb;
         });
       } else {
-        // Más recientes primero (por date de creación)
         const orden = ['birthday', 'itv', 'turno', 'general'];
         sorted = [...pendientes].sort((a, b) => orden.indexOf(a.tipo) - orden.indexOf(b.tipo));
       }
       html += sorted.map(a => rAlertItem(a)).join('');
     }
   } else {
-    /* Tab completadas */
     if (completadas.length === 0) {
       html += `
       <div class="empty">
@@ -375,16 +384,22 @@ function render() {
       html += completadas.map(a => rAlertItem(a)).join('');
     }
   }
-
+ 
   document.getElementById('view').innerHTML = html;
-
-  /* ── Toast automático: cumpleaños de hoy ── */
+ 
+  /* Toast automático: cumpleaños de hoy */
   if (cumpleHoy.length > 0) {
     const nombres = cumpleHoy.map(c => c.name).join(', ');
     toast(`🎉 Cumpleaños hoy: ${nombres}`, 'success');
   }
+ 
+  /* Toast informativo si vino desde gestoría */
+  if (_prefillTurno) {
+    toast('📅 Completá los datos del turno y guardá la alerta', 'info');
+  }
 }
-
+ 
 /* ── Boot ── */
 bootApp('alertas');
+_checkPrefill(); // ← leer prefill de gestoría ANTES del primer render
 render();
