@@ -1,5 +1,9 @@
 /* ═══════════════════════════════════════════════════════════════
    NEIFERT CRM — js/alertas.js
+   VERSIÓN ACTUALIZADA — incluye:
+     · Alertas manuales (igual que antes)
+     · Sección automática de tareas próximas (hoy + 48 h)
+     · Sección automática de cumpleaños de clientes (hoy + 7 días)
    ═══════════════════════════════════════════════════════════════ */
 
 let addAlertaOpen = false;
@@ -8,7 +12,59 @@ let activeTab     = 'activas';
 const ICON_MAP  = { birthday:'🎉', itv:'⚠️', turno:'📅', general:'🔔' };
 const COLOR_MAP = { birthday:'purple', itv:'red', turno:'gold', general:'blue' };
 
-/* ── CRUD ── */
+/* ── Helpers de fecha (locales para no depender del orden de carga) ── */
+
+/**
+ * Diferencia en días enteros entre HOY (00:00) y una fecha ISO.
+ * Negativo = pasada, 0 = hoy, positivo = futura.
+ */
+function _diffDays(isoDate) {
+  if (!isoDate) return null;
+  const hoy   = new Date(); hoy.setHours(0, 0, 0, 0);
+  const fecha = new Date(isoDate + 'T00:00:00');
+  return Math.round((fecha - hoy) / (1000 * 60 * 60 * 24));
+}
+
+/**
+ * Calcula la edad a partir de una fecha de nacimiento ISO.
+ * Devuelve null si no se puede calcular.
+ */
+function _calcEdad(fechaNac) {
+  if (!fechaNac) return null;
+  const hoy  = new Date();
+  const nac  = new Date(fechaNac);
+  let edad = hoy.getFullYear() - nac.getFullYear();
+  const m  = hoy.getMonth() - nac.getMonth();
+  if (m < 0 || (m === 0 && hoy.getDate() < nac.getDate())) edad--;
+  return edad >= 0 ? edad : null;
+}
+
+/**
+ * Días hasta el próximo cumpleaños (0 = hoy, 1 = mañana, etc.)
+ * Utiliza la función daysUntil de app.js si está disponible,
+ * pero también puede calcularlo de forma autónoma.
+ */
+function _diasHastaCumple(fechaNac) {
+  if (!fechaNac) return null;
+  return typeof daysUntil === 'function' ? daysUntil(fechaNac) : _calcDiasHastaCumple(fechaNac);
+}
+function _calcDiasHastaCumple(fechaNac) {
+  const d = new Date(fechaNac), n = new Date();
+  let next = new Date(n.getFullYear(), d.getMonth(), d.getDate());
+  if (next < n) next.setFullYear(next.getFullYear() + 1);
+  return Math.ceil((next - n) / (1000 * 60 * 60 * 24));
+}
+
+/* ── Carga de tareas desde localStorage ── */
+function _loadTareasAlertas() {
+  try {
+    return JSON.parse(localStorage.getItem('crm_tareas') || '[]');
+  } catch { return []; }
+}
+
+/* ════════════════════════════════════════
+   CRUD — Alertas manuales (sin cambios)
+   ════════════════════════════════════════ */
 function addAlerta(e) {
   e.preventDefault();
   const f = e.target;
@@ -29,18 +85,20 @@ function addAlerta(e) {
 }
 
 function marcarAlerta(id, done) {
-  const a = S.alertas.find(x=>x.id===id);
+  const a = S.alertas.find(x => x.id === id);
   if (a) a.done = done;
   save(); render();
 }
 
 function delAlerta(id) {
   if (!confirm('¿Eliminar esta alerta?')) return;
-  S.alertas = S.alertas.filter(a=>a.id!==id);
+  S.alertas = S.alertas.filter(a => a.id !== id);
   save(); render();
 }
 
-/* ── Formulario de nueva alerta ── */
+/* ════════════════════════════════════════
+   FORMULARIO — Nueva alerta (sin cambios)
+   ════════════════════════════════════════ */
 function rAlertaForm() {
   return `
   <div class="form-section">
@@ -67,33 +125,178 @@ function rAlertaForm() {
   </div>`;
 }
 
-/* ── Item de alerta ── */
+/* ════════════════════════════════════════
+   ITEM — Alerta manual (sin cambios)
+   ════════════════════════════════════════ */
 function rAlertItem(a) {
   return `
-  <div class="alert-item ${a.done?'done':''}">
-    <div class="alert-icon ${a.tipo}" style="font-size:18px">${ICON_MAP[a.tipo]||'🔔'}</div>
+  <div class="alert-item ${a.done ? 'done' : ''}">
+    <div class="alert-icon ${a.tipo}" style="font-size:18px">${ICON_MAP[a.tipo] || '🔔'}</div>
     <div class="alert-body">
       <div class="alert-title">${esc(a.titulo)}</div>
       <div class="alert-sub">
-        ${a.descripcion?esc(a.descripcion):''}
-        ${a.fecha?' · '+a.fecha:''}
+        ${a.descripcion ? esc(a.descripcion) : ''}
+        ${a.fecha ? ' · ' + a.fecha : ''}
         · Por <strong>${esc(a.creadoPor)}</strong>
       </div>
     </div>
     <div class="alert-actions">
-      ${a.refPhone?whatsappBtn(a.refPhone,a.refName||'',true):''}
+      ${a.refPhone ? whatsappBtn(a.refPhone, a.refName || '', true) : ''}
       ${!a.done
-        ?`<button class="btn sm success" onclick="marcarAlerta('${a.id}',true)">✓ Hecho</button>`
-        :`<button class="btn sm" onclick="marcarAlerta('${a.id}',false)">Reabrir</button>`}
+        ? `<button class="btn sm success" onclick="marcarAlerta('${a.id}',true)">✓ Hecho</button>`
+        : `<button class="btn sm" onclick="marcarAlerta('${a.id}',false)">Reabrir</button>`}
       <button class="btn sm danger" onclick="delAlerta('${a.id}')">×</button>
     </div>
   </div>`;
 }
 
-/* ── Render ── */
+/* ════════════════════════════════════════
+   NUEVO — Sección de tareas próximas
+   ════════════════════════════════════════ */
+
+/**
+ * Devuelve las tareas pendientes que vencen HOY o en las próximas 48 horas.
+ */
+function _getTareasProximas() {
+  return _loadTareasAlertas()
+    .filter(t => {
+      if (t.done) return false;
+      const d = _diffDays(t.fecha);
+      return d !== null && d >= 0 && d <= 2; // 0 = hoy, 1 = mañana, 2 = pasado
+    })
+    .sort((a, b) => new Date(a.fecha) - new Date(b.fecha));
+}
+
+/** Render de la sección de tareas próximas */
+function rTareasProximas() {
+  const tareas = _getTareasProximas();
+  if (tareas.length === 0) return '';
+
+  const items = tareas.map(t => {
+    const d     = _diffDays(t.fecha);
+    const label = d === 0 ? 'Hoy' : d === 1 ? 'Mañana' : 'En 2 días';
+    const color = d === 0 ? 'var(--gold)' : 'var(--green)';
+    const badge = d === 0 ? 'bg-gold' : 'bg-green';
+    return `
+    <div class="alert-item" style="border-left:3px solid ${color}">
+      <div style="font-size:18px">📋</div>
+      <div class="alert-body">
+        <div class="alert-title">${esc(t.titulo)}</div>
+        <div class="alert-sub">
+          ${t.descripcion ? esc(t.descripcion) + ' · ' : ''}
+          ${t.clienteNombre ? '👤 ' + esc(t.clienteNombre) + ' · ' : ''}
+          Por <strong>${esc(t.creadoPor)}</strong>
+        </div>
+      </div>
+      <div class="alert-actions">
+        ${t.clientePhone ? whatsappBtn(t.clientePhone, t.clienteNombre || '', true) : ''}
+        <span class="badge ${badge}">${label}</span>
+        <a href="tareas.html" class="btn sm">Ver tareas</a>
+      </div>
+    </div>`;
+  }).join('');
+
+  return `
+  <div style="margin-bottom:1.25rem">
+    <div style="font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;
+                color:var(--text-3);margin-bottom:8px;padding-bottom:4px;
+                border-bottom:1px solid var(--border)">
+      📋 Tareas próximas (hoy y mañana)
+    </div>
+    ${items}
+  </div>`;
+}
+
+/* ════════════════════════════════════════
+   NUEVO — Sección de cumpleaños de clientes
+   ════════════════════════════════════════ */
+
+/**
+ * Devuelve clientes con cumpleaños hoy o en los próximos 7 días,
+ * junto con metadata calculada (días, edad).
+ */
+function _getCumpleaniosProximos() {
+  return S.clients
+    .filter(c => c.fechaCumple)
+    .map(c => ({
+      ...c,
+      diasHasta: _diasHastaCumple(c.fechaCumple),
+      edad:      _calcEdad(c.fechaCumple),
+    }))
+    .filter(c => c.diasHasta !== null && c.diasHasta >= 0 && c.diasHasta <= 7)
+    .sort((a, b) => a.diasHasta - b.diasHasta);
+}
+
+/** Render de la sección de cumpleaños */
+function rCumpleanios() {
+  const clientes = _getCumpleaniosProximos();
+  if (clientes.length === 0) return '';
+
+  const items = clientes.map(c => {
+    const esHoy  = c.diasHasta === 0;
+    const label  = esHoy ? '¡Hoy!' : c.diasHasta === 1 ? 'Mañana' : `En ${c.diasHasta} días`;
+    const badge  = esHoy ? 'bg-purple' : 'bg-blue';
+    const edad   = c.edad !== null ? `· Cumple ${c.edad} años` : '';
+
+    return `
+    <div class="alert-item${esHoy ? ' birthday-hoy' : ''}">
+      <div style="font-size:18px">${esHoy ? '🎁' : '🎂'}</div>
+      <div class="alert-body">
+        <div class="alert-title">${esc(c.name)} ${esHoy ? '🎉' : ''}</div>
+        <div class="alert-sub">
+          ${c.phone}
+          ${c.email ? ' · ' + esc(c.email) : ''}
+          ${edad}
+        </div>
+      </div>
+      <div class="alert-actions">
+        ${whatsappBtn(c.phone, c.name, true)}
+        ${esHoy
+          ? `<button class="btn sm" style="border-color:var(--purple-border);color:var(--purple)"
+               onclick="openWhatsAppBirthday('${esc(c.phone)}','${esc(c.name)}')">🎉 Felicitar</button>`
+          : ''}
+        <span class="badge ${badge}">${label}</span>
+      </div>
+    </div>`;
+  }).join('');
+
+  return `
+  <div style="margin-bottom:1.25rem">
+    <div style="font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;
+                color:var(--text-3);margin-bottom:8px;padding-bottom:4px;
+                border-bottom:1px solid var(--border)">
+      🎂 Cumpleaños próximos (7 días)
+    </div>
+    ${items}
+  </div>`;
+}
+
+/* ════════════════════════════════════════
+   RENDER PRINCIPAL
+   ════════════════════════════════════════ */
 function render() {
-  const pendientes  = S.alertas.filter(a=>!a.done);
-  const completadas = S.alertas.filter(a=>a.done);
+  const pendientes  = S.alertas.filter(a => !a.done);
+  const completadas = S.alertas.filter(a =>  a.done);
+
+  /* Resumen rápido de alertas manuales */
+  const tipos = ['birthday', 'itv', 'turno', 'general'];
+  const badgesConf = {
+    birthday: { clase:'bg-purple', label:(n) => `🎉 ${n} cumpleaños` },
+    itv:      { clase:'bg-red',    label:(n) => `⚠️ ${n} ITV` },
+    turno:    { clase:'bg-gold',   label:(n) => `📅 ${n} turno${n>1?'s':''}` },
+    general:  { clase:'bg-blue',   label:(n) => `🔔 ${n} general${n>1?'es':''}` },
+  };
+  const badgesHtml = tipos
+    .map(tipo => {
+      const n = pendientes.filter(a => a.tipo === tipo).length;
+      if (n === 0) return '';
+      const b = badgesConf[tipo];
+      return `<span class="badge ${b.clase}">${b.label(n)}</span>`;
+    })
+    .join('');
+
+  /* Conteos para toast de cumpleaños de hoy */
+  const cumpleHoy = _getCumpleaniosProximos().filter(c => c.diasHasta === 0);
 
   let html = `
   <div class="section-head">
@@ -103,24 +306,31 @@ function render() {
 
   ${addAlertaOpen ? rAlertaForm() : ''}
 
-  <!-- Resumen rápido -->
-  <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:1rem">
-    ${pendientes.filter(a=>a.tipo==='birthday').length>0?`<span class="badge bg-purple">🎉 ${pendientes.filter(a=>a.tipo==='birthday').length} cumpleaños</span>`:''}
-    ${pendientes.filter(a=>a.tipo==='itv').length>0?`<span class="badge bg-red">⚠️ ${pendientes.filter(a=>a.tipo==='itv').length} ITV</span>`:''}
-    ${pendientes.filter(a=>a.tipo==='turno').length>0?`<span class="badge bg-gold">📅 ${pendientes.filter(a=>a.tipo==='turno').length} turno${pendientes.filter(a=>a.tipo==='turno').length>1?'s':''}</span>`:''}
-    ${pendientes.filter(a=>a.tipo==='general').length>0?`<span class="badge bg-blue">🔔 ${pendientes.filter(a=>a.tipo==='general').length} general${pendientes.filter(a=>a.tipo==='general').length>1?'es':''}</span>`:''}
-  </div>
+  <!-- Resumen rápido alertas manuales -->
+  ${badgesHtml ? `<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:1rem">${badgesHtml}</div>` : ''}
 
-  <!-- Tabs -->
+  <!-- ── NUEVO: cumpleaños próximos (automático desde clientes) ── -->
+  ${rCumpleanios()}
+
+  <!-- ── NUEVO: tareas próximas (automático desde crm_tareas) ── -->
+  ${rTareasProximas()}
+
+  <!-- Tabs alertas manuales -->
+  <div style="font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;
+              color:var(--text-3);margin-bottom:8px;padding-bottom:4px;
+              border-bottom:1px solid var(--border)">
+    🔔 Alertas manuales
+  </div>
   <div class="tabs">
-    <button class="tab-btn ${activeTab==='activas'?'active':''}" onclick="activeTab='activas';render()">
+    <button class="tab-btn ${activeTab === 'activas' ? 'active' : ''}" onclick="activeTab='activas';render()">
       Activas (${pendientes.length})
     </button>
-    <button class="tab-btn ${activeTab==='done'?'active':''}" onclick="activeTab='done';render()">
+    <button class="tab-btn ${activeTab === 'done' ? 'active' : ''}" onclick="activeTab='done';render()">
       Completadas (${completadas.length})
     </button>
   </div>`;
 
+  /* Tab activas */
   if (activeTab === 'activas') {
     if (pendientes.length === 0) {
       html += `
@@ -130,12 +340,12 @@ function render() {
         <div style="font-size:13px;margin-top:4px">¡Todo al día! No hay alertas pendientes.</div>
       </div>`;
     } else {
-      /* Ordenar: birthday primero, luego ITV, luego turno, luego general */
-      const orden = ['birthday','itv','turno','general'];
-      const sorted = [...pendientes].sort((a,b)=>orden.indexOf(a.tipo)-orden.indexOf(b.tipo));
-      html += sorted.map(a=>rAlertItem(a)).join('');
+      const orden  = ['birthday', 'itv', 'turno', 'general'];
+      const sorted = [...pendientes].sort((a, b) => orden.indexOf(a.tipo) - orden.indexOf(b.tipo));
+      html += sorted.map(a => rAlertItem(a)).join('');
     }
   } else {
+    /* Tab completadas */
     if (completadas.length === 0) {
       html += `
       <div class="empty">
@@ -143,11 +353,17 @@ function render() {
         <strong>Sin alertas completadas</strong>
       </div>`;
     } else {
-      html += completadas.map(a=>rAlertItem(a)).join('');
+      html += completadas.map(a => rAlertItem(a)).join('');
     }
   }
 
   document.getElementById('view').innerHTML = html;
+
+  /* ── Toast automático: cumpleaños de hoy ── */
+  if (cumpleHoy.length > 0) {
+    const nombres = cumpleHoy.map(c => c.name).join(', ');
+    toast(`🎉 Cumpleaños hoy: ${nombres}`, 'success');
+  }
 }
 
 /* ── Boot ── */
