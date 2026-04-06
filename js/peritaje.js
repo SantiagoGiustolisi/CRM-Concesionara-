@@ -413,9 +413,10 @@ function savePeritaje(e) {
     car.peritaje.dtcCode1 = car.peritaje.dtcCode;
   }
 
-  save();
-  toast('Peritaje guardado correctamente', 'success');
-  render();
+ save();
+toast('Peritaje guardado correctamente', 'success');
+selectedCarId = null;
+render();
 }
 
 /* ── Formulario de peritaje completo ── */
@@ -441,7 +442,7 @@ function rPeritajeForm(car) {
         <div class="fg3">
           <div class="fg"><label>Fecha</label><input type="date" name="fecha" value="${p.fecha || ''}"></div>
           <div class="fg"><label>Peritador</label><input type="text" name="peritador" value="${esc(p.peritador || '')}" placeholder="Nombre del peritador"></div>
-          <div class="fg"><label>De toma / precio compra ($)</label><input type="number" name="deToma" min="0" value="${p.deToma || ''}" placeholder="$"></div>
+       
         </div>
       </div>
 

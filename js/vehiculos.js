@@ -18,8 +18,7 @@ function addCar(e) {
     patente:         f.patente.value.trim().toUpperCase(),
     tipo:            f.tipo.value,
     year:            +f.year.value,
-    price:           +f.price.value,
-    km:              f.km.value ? +f.km.value : null,
+    km:              f.km.value ? +f.km.value : 0,
     trans:           f.trans.value,
     color:           f.color.value.trim(),
     monedaContado:   f.monedaContado.value,
@@ -58,8 +57,7 @@ function saveEditCar(e) {
   car.patente         = f.patente.value.trim().toUpperCase();
   car.tipo            = f.tipo.value;
   car.year            = +f.year.value;
-  car.price           = +f.price.value;
-  car.km              = f.km.value ? +f.km.value : null;
+  car.km              = f.km.value ? +f.km.value : 0;
   car.trans           = f.trans.value;
   car.color           = f.color.value.trim();
   car.monedaContado   = f.monedaContado.value;
@@ -95,6 +93,37 @@ function delCar(id) {
   save(); render();
 }
 
+/* ── Toggle 0km ── */
+function toggleZeroKm(btn) {
+  const input  = document.getElementById('kmInput');
+  const duenio = document.getElementById('duenioWrap');
+  const isZero = btn.dataset.zero === 'true';
+
+  if (isZero) {
+    // Volver a ingreso manual
+    btn.dataset.zero      = 'false';
+    btn.textContent       = '0 km';
+    btn.style.background  = '';
+    btn.style.color       = '';
+    btn.style.borderColor = '';
+    input.disabled        = false;
+    input.value           = '';
+    input.placeholder     = '45000';
+    if (duenio) duenio.style.display = 'block';
+  } else {
+    // Activar 0 km
+    btn.dataset.zero      = 'true';
+    btn.textContent       = '✓ 0 km';
+    btn.style.background  = 'var(--green)';
+    btn.style.color       = '#fff';
+    btn.style.borderColor = 'var(--green)';
+    input.disabled        = true;
+    input.value           = '0';
+    input.placeholder     = '0';
+    if (duenio) duenio.style.display = 'none';
+  }
+}
+
 /* ── Formulario ── */
 function toggleITV(sel) {
   const wrap = document.getElementById('itvVencWrap');
@@ -102,8 +131,12 @@ function toggleITV(sel) {
 }
 
 function rCarForm(car) {
-  const edit   = !!car;
-  const itvSi  = !edit || car.itv==='si' || !car.itv;
+  const edit      = !!car;
+  const itvSi     = !edit || car.itv==='si' || !car.itv;
+  const esZeroKm  = edit && car.km === 0;
+  const kmVal     = edit && !esZeroKm && car.km ? car.km : '';
+  const showDuenio= !esZeroKm;
+
   return `
   <div class="form-section">
     <div class="form-title">${edit?'Editar vehículo':'Agregar vehículo al stock'}</div>
@@ -122,7 +155,29 @@ function rCarForm(car) {
         <div class="fg3">
           <div class="fg"><label>Patente</label><input type="text" name="patente" placeholder="AA123BB" value="${edit&&car.patente?esc(car.patente):''}" style="text-transform:uppercase"></div>
           <div class="fg"><label>Año *</label><input type="number" name="year" placeholder="2022" min="1990" max="2030" value="${edit?car.year:''}" required></div>
-          <div class="fg"><label>Kilometraje</label><input type="number" name="km" placeholder="45000" min="0" value="${edit&&car.km?car.km:''}"></div>
+          <div class="fg">
+            <label>Kilometraje</label>
+            <div style="display:flex;gap:6px;align-items:center">
+              <input
+                id="kmInput"
+                type="number"
+                name="km"
+                placeholder="45000"
+                min="0"
+                value="${kmVal}"
+                ${esZeroKm?'disabled':''}
+                style="flex:1"
+                oninput="const w=document.getElementById('duenioWrap');if(w)w.style.display=this.value==0?'none':'block'"
+              >
+              <button
+                type="button"
+                class="btn sm"
+                data-zero="${esZeroKm?'true':'false'}"
+                onclick="toggleZeroKm(this)"
+                style="${esZeroKm?'background:var(--green);color:#fff;border-color:var(--green)':''}"
+              >${esZeroKm?'✓ 0 km':'0 km'}</button>
+            </div>
+          </div>
         </div>
         <div class="fg3">
           <div class="fg"><label>Tipo *</label>
@@ -145,7 +200,6 @@ function rCarForm(car) {
       <div class="hint-box">
         <div class="hint-label">Precios</div>
         <div class="fg3">
-          <div class="fg"><label>Precio lista (matching) *</label><input type="number" name="price" placeholder="13000000" min="0" value="${edit?car.price:''}" required></div>
           <div class="fg">
             <label>Precio contado / efectivo</label>
             <div style="display:flex;gap:6px">
@@ -163,7 +217,7 @@ function rCarForm(car) {
         </div>
       </div>
 
-      <div class="hint-box">
+      <div class="hint-box" id="duenioWrap" style="display:${showDuenio?'block':'none'}">
         <div class="hint-label">Dueño anterior</div>
         <div class="fg3">
           <div class="fg"><label>Nombre</label><input type="text" name="duenioNombre" placeholder="Carlos" value="${edit&&car.duenioNombre?esc(car.duenioNombre):''}"></div>
@@ -254,6 +308,7 @@ function render() {
     const hasPeritaje = car.peritaje && Object.keys(car.peritaje).length > 0;
     const itvVencida  = car.itv==='no' && car.itvVenc;
     const daysITV     = itvVencida ? Math.ceil((new Date(car.itvVenc)-new Date())/(1000*60*60*24)) : null;
+    const esZeroKm    = car.km === 0;
 
     html += `
     <div class="card">
@@ -264,24 +319,24 @@ function render() {
             ${esc(car.brand)} ${esc(car.model)}
             ${car.version?`<span style="font-size:13px;font-weight:400;color:var(--text-3)">${esc(car.version)}</span>`:''}
             ${car.patente?`<span style="font-size:11px;background:var(--surface-3);color:var(--text-2);padding:2px 8px;border-radius:4px;border:1px solid var(--border);letter-spacing:.08em">${esc(car.patente)}</span>`:''}
+            ${esZeroKm?'<span class="badge bg-blue">0 km</span>':''}
             ${itvVencida?`<span class="badge ${daysITV!==null&&daysITV<=0?'bg-red':'bg-orange'}">ITV ${daysITV!==null&&daysITV<=0?'VENCIDA':`vence en ${daysITV}d`}</span>`:''}
             ${car.carpetaEntregada?'<span class="badge bg-green">Carpeta ✓</span>':''}
           </div>
           <div style="font-size:13px;color:var(--text-2);margin-top:3px">
             ${car.year} · ${car.tipo} · ${car.trans}
-            ${car.km?' · '+fk(car.km):''}
+            ${!esZeroKm && car.km ? ' · '+fk(car.km) : ''}
             ${car.color?' · '+esc(car.color):''}
           </div>
           <div style="font-size:12px;margin-top:4px;display:flex;gap:12px;flex-wrap:wrap">
             ${car.precioContado?`<span style="color:var(--green)">Contado: ${car.monedaContado||'ARS'} ${car.precioContado.toLocaleString('es-AR')}</span>`:''}
             ${car.precioCanje?`<span style="color:var(--blue)">Canje: ${car.monedaCanje||'ARS'} ${car.precioCanje.toLocaleString('es-AR')}</span>`:''}
           </div>
-          ${car.duenioNombre?`<div style="font-size:11px;color:var(--text-3);margin-top:3px">Dueño ant.: ${esc(car.duenioNombre)} ${esc(car.duenioApellido)}${car.duenioContacto?' · '+esc(car.duenioContacto):''}</div>`:''}
+          ${!esZeroKm && car.duenioNombre ? `<div style="font-size:11px;color:var(--text-3);margin-top:3px">Dueño ant.: ${esc(car.duenioNombre)} ${esc(car.duenioApellido)}${car.duenioContacto?' · '+esc(car.duenioContacto):''}</div>` : ''}
           ${car.nota?`<div style="font-size:12px;color:var(--text-2);font-style:italic;margin-top:3px">"${esc(car.nota)}"</div>`:''}
           ${car.creadoPor?`<div style="font-size:11px;color:var(--text-3);margin-top:2px">Cargado por: ${esc(car.creadoPor)}</div>`:''}
         </div>
         <div style="text-align:right;flex-shrink:0">
-          <div style="font-weight:600;font-size:15px;color:var(--gold)">${fp(car.price)}</div>
           ${ms.length>0?`<span class="badge bg-green" style="margin-top:4px">${ms.length} match${ms.length>1?'es':''}</span>`:`<span class="badge bg-gray" style="margin-top:4px">Sin matches</span>`}
         </div>
       </div>
@@ -326,7 +381,7 @@ function render() {
             <div>
               <span style="font-weight:500;color:var(--text-2)">${esc(car.brand)} ${esc(car.model)} ${car.year}</span>
               ${car.patente?`<span style="font-size:11px;color:var(--text-3);margin-left:6px">[${esc(car.patente)}]</span>`:''}
-              <span style="color:var(--text-3)"> · ${fp(car.price)}</span>
+              ${car.km===0?'<span class="badge bg-blue" style="margin-left:6px">0 km</span>':''}
             </div>
             <div style="display:flex;gap:6px;align-items:center">
               <span class="badge ${car.status==='vendido'?'bg-green':'bg-orange'}">${car.status}</span>
