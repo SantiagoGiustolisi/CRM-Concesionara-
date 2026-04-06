@@ -8,6 +8,7 @@
 
 let addAlertaOpen = false;
 let activeTab     = 'activas';
+let alertasSort   = 'proximas'; // 'proximas' | 'recientes'
 
 const ICON_MAP  = { birthday:'🎉', itv:'⚠️', turno:'📅', general:'🔔' };
 const COLOR_MAP = { birthday:'purple', itv:'red', turno:'gold', general:'blue' };
@@ -321,13 +322,20 @@ function render() {
               border-bottom:1px solid var(--border)">
     🔔 Alertas manuales
   </div>
-  <div class="tabs">
-    <button class="tab-btn ${activeTab === 'activas' ? 'active' : ''}" onclick="activeTab='activas';render()">
-      Activas (${pendientes.length})
-    </button>
-    <button class="tab-btn ${activeTab === 'done' ? 'active' : ''}" onclick="activeTab='done';render()">
-      Completadas (${completadas.length})
-    </button>
+  <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:8px">
+    <div class="tabs" style="margin-bottom:0">
+      <button class="tab-btn ${activeTab === 'activas' ? 'active' : ''}" onclick="activeTab='activas';render()">
+        Activas (${pendientes.length})
+      </button>
+      <button class="tab-btn ${activeTab === 'done' ? 'active' : ''}" onclick="activeTab='done';render()">
+        Completadas (${completadas.length})
+      </button>
+    </div>
+    <div style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--text-3)">
+      Ordenar:
+      <button class="btn sm${alertasSort==='proximas'?' active':''}" onclick="alertasSort='proximas';render()">📅 Más próximas</button>
+      <button class="btn sm${alertasSort==='recientes'?' active':''}" onclick="alertasSort='recientes';render()">🕐 Más recientes</button>
+    </div>
   </div>`;
 
   /* Tab activas */
@@ -340,8 +348,19 @@ function render() {
         <div style="font-size:13px;margin-top:4px">¡Todo al día! No hay alertas pendientes.</div>
       </div>`;
     } else {
-      const orden  = ['birthday', 'itv', 'turno', 'general'];
-      const sorted = [...pendientes].sort((a, b) => orden.indexOf(a.tipo) - orden.indexOf(b.tipo));
+      let sorted;
+      if (alertasSort === 'proximas') {
+        // Ordenar por fecha más próxima; sin fecha van al final
+        sorted = [...pendientes].sort((a, b) => {
+          const fa = a.fecha ? new Date(a.fecha) : new Date('9999-12-31');
+          const fb = b.fecha ? new Date(b.fecha) : new Date('9999-12-31');
+          return fa - fb;
+        });
+      } else {
+        // Más recientes primero (por date de creación)
+        const orden = ['birthday', 'itv', 'turno', 'general'];
+        sorted = [...pendientes].sort((a, b) => orden.indexOf(a.tipo) - orden.indexOf(b.tipo));
+      }
       html += sorted.map(a => rAlertItem(a)).join('');
     }
   } else {

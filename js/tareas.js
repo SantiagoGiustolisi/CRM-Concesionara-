@@ -26,7 +26,8 @@
 
 /* ── Estado local del módulo ── */
 let addTareaOpen = false;
-let editTareaId  = null;
+let editTareaId = null;
+let tareasSort = 'proximas'; // 'proximas' | 'vencimiento'
 
 /* ── Clave de localStorage ── */
 const TAREAS_KEY = 'crm_tareas';
@@ -41,7 +42,7 @@ function loadTareas() {
 function saveTareas(tareas) {
   try {
     localStorage.setItem(TAREAS_KEY, JSON.stringify(tareas));
-  } catch(e) { console.warn('Error guardando tareas:', e); }
+  } catch (e) { console.warn('Error guardando tareas:', e); }
 }
 
 /* ── Helpers de fecha ── */
@@ -51,25 +52,25 @@ function saveTareas(tareas) {
  * Negativo = pasada, 0 = hoy, positivo = futura.
  */
 function diffDays(isoDate) {
-  const hoy   = new Date(); hoy.setHours(0,0,0,0);
+  const hoy = new Date(); hoy.setHours(0, 0, 0, 0);
   const fecha = new Date(isoDate + 'T00:00:00');
-  return Math.round((fecha - hoy) / (1000*60*60*24));
+  return Math.round((fecha - hoy) / (1000 * 60 * 60 * 24));
 }
 
 /** Etiqueta legible de la fecha */
 function labelFecha(isoDate) {
   const d = diffDays(isoDate);
-  if (d < 0)  return `Venció hace ${Math.abs(d)} día${Math.abs(d)>1?'s':''}`;
+  if (d < 0) return `Venció hace ${Math.abs(d)} día${Math.abs(d) > 1 ? 's' : ''}`;
   if (d === 0) return 'Hoy';
   if (d === 1) return 'Mañana';
-  return new Date(isoDate + 'T00:00:00').toLocaleDateString('es-AR', { day:'numeric', month:'short', year:'numeric' });
+  return new Date(isoDate + 'T00:00:00').toLocaleDateString('es-AR', { day: 'numeric', month: 'short', year: 'numeric' });
 }
 
 /** Clasificación visual según urgencia */
 function urgencia(isoDate, done) {
   if (done) return 'done';
   const d = diffDays(isoDate);
-  if (d < 0)  return 'vencida';
+  if (d < 0) return 'vencida';
   if (d === 0) return 'hoy';
   return 'proxima';
 }
@@ -78,29 +79,29 @@ function urgencia(isoDate, done) {
 function checkTareasVencidas(tareas) {
   const vencidas = tareas.filter(t => !t.done && diffDays(t.fecha) < 0);
   if (vencidas.length > 0) {
-    toast(`⚠️ Tenés ${vencidas.length} tarea${vencidas.length>1?'s':''} vencida${vencidas.length>1?'s':''}`, 'error');
+    toast(`⚠️ Tenés ${vencidas.length} tarea${vencidas.length > 1 ? 's' : ''} vencida${vencidas.length > 1 ? 's' : ''}`, 'error');
   }
 }
 
 /* ── CRUD ── */
 function addTarea(e) {
   e.preventDefault();
-  const f      = e.target;
+  const f = e.target;
   const selIdx = f.clienteId.value;
   const cliente = selIdx ? S.clients.find(c => c.id === selIdx) : null;
 
   const tareas = loadTareas();
   tareas.unshift({
-    id:            uid(),
-    titulo:        f.titulo.value.trim(),
-    descripcion:   f.descripcion.value.trim(),
-    fecha:         f.fecha.value,
-    clienteId:     cliente ? cliente.id   : null,
+    id: uid(),
+    titulo: f.titulo.value.trim(),
+    descripcion: f.descripcion.value.trim(),
+    fecha: f.fecha.value,
+    clienteId: cliente ? cliente.id : null,
     clienteNombre: cliente ? cliente.name : null,
-    clientePhone:  cliente ? cliente.phone : null,
-    creadoPor:     getSession().nombre,
-    done:          false,
-    createdAt:     todayISO(),
+    clientePhone: cliente ? cliente.phone : null,
+    creadoPor: getSession().nombre,
+    done: false,
+    createdAt: todayISO(),
   });
   saveTareas(tareas);
 
@@ -111,20 +112,20 @@ function addTarea(e) {
 
 function saveEditTarea(e) {
   e.preventDefault();
-  const f      = e.target;
+  const f = e.target;
   const selIdx = f.clienteId.value;
   const cliente = selIdx ? S.clients.find(c => c.id === selIdx) : null;
 
   const tareas = loadTareas();
-  const tarea  = tareas.find(t => t.id === editTareaId);
+  const tarea = tareas.find(t => t.id === editTareaId);
   if (!tarea) return;
 
-  tarea.titulo        = f.titulo.value.trim();
-  tarea.descripcion   = f.descripcion.value.trim();
-  tarea.fecha         = f.fecha.value;
-  tarea.clienteId     = cliente ? cliente.id    : null;
-  tarea.clienteNombre = cliente ? cliente.name  : null;
-  tarea.clientePhone  = cliente ? cliente.phone : null;
+  tarea.titulo = f.titulo.value.trim();
+  tarea.descripcion = f.descripcion.value.trim();
+  tarea.fecha = f.fecha.value;
+  tarea.clienteId = cliente ? cliente.id : null;
+  tarea.clienteNombre = cliente ? cliente.name : null;
+  tarea.clientePhone = cliente ? cliente.phone : null;
 
   saveTareas(tareas);
   editTareaId = null;
@@ -155,15 +156,15 @@ function rTareaForm(tarea) {
   const edit = !!tarea;
 
   /* Opciones del selector de clientes (activos primero) */
-  const clientesActivos   = S.clients.filter(c => c.status === 'activo');
+  const clientesActivos = S.clients.filter(c => c.status === 'activo');
   const clientesInactivos = S.clients.filter(c => c.status !== 'activo');
   const optsActivos = clientesActivos.map(c =>
-    `<option value="${c.id}"${edit && tarea.clienteId===c.id?' selected':''}>${esc(c.name)} · ${c.phone}</option>`
+    `<option value="${c.id}"${edit && tarea.clienteId === c.id ? ' selected' : ''}>${esc(c.name)} · ${c.phone}</option>`
   ).join('');
   const optsInactivos = clientesInactivos.length > 0
     ? `<optgroup label="Inactivos/Descartados">${clientesInactivos.map(c =>
-        `<option value="${c.id}"${edit && tarea.clienteId===c.id?' selected':''}>${esc(c.name)}</option>`
-      ).join('')}</optgroup>`
+      `<option value="${c.id}"${edit && tarea.clienteId === c.id ? ' selected' : ''}>${esc(c.name)}</option>`
+    ).join('')}</optgroup>`
     : '';
 
   return `
@@ -211,15 +212,15 @@ function rTareaForm(tarea) {
 
 /* ── Item de tarea individual ── */
 function rTareaItem(t) {
-  const urg   = urgencia(t.fecha, t.done);
+  const urg = urgencia(t.fecha, t.done);
   const label = labelFecha(t.fecha);
 
   /* Colores según urgencia */
   const colores = {
-    vencida: { border: 'var(--red)',    bg: 'var(--red-bg)',    badge: 'bg-red',    icon: '🔴' },
-    hoy:     { border: 'var(--gold)',   bg: 'var(--gold-bg)',   badge: 'bg-gold',   icon: '🟡' },
-    proxima: { border: 'var(--green)',  bg: 'var(--green-bg)',  badge: 'bg-green',  icon: '🟢' },
-    done:    { border: 'var(--border)', bg: 'var(--surface-2)', badge: 'bg-gray',   icon: '✓'  },
+    vencida: { border: 'var(--red)', bg: 'var(--red-bg)', badge: 'bg-red', icon: '🔴' },
+    hoy: { border: 'var(--gold)', bg: 'var(--gold-bg)', badge: 'bg-gold', icon: '🟡' },
+    proxima: { border: 'var(--green)', bg: 'var(--green-bg)', badge: 'bg-green', icon: '🟢' },
+    done: { border: 'var(--border)', bg: 'var(--surface-2)', badge: 'bg-gray', icon: '✓' },
   };
   const c = colores[urg] || colores.proxima;
 
@@ -246,9 +247,9 @@ function rTareaItem(t) {
     <div class="sep" style="display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end">
       ${t.clientePhone ? whatsappBtn(t.clientePhone, t.clienteNombre || '', true) : ''}
       ${!t.done
-        ? `<button class="btn sm success" onclick="marcarTarea('${t.id}',true)">✓ Completar</button>`
-        : `<button class="btn sm" onclick="marcarTarea('${t.id}',false)">Reabrir</button>`
-      }
+      ? `<button class="btn sm success" onclick="marcarTarea('${t.id}',true)">✓ Completar</button>`
+      : `<button class="btn sm" onclick="marcarTarea('${t.id}',false)">Reabrir</button>`
+    }
       ${!t.done ? `<button class="btn sm" onclick="editTarea('${t.id}')">Editar</button>` : ''}
       <button class="btn sm danger" onclick="delTarea('${t.id}')">×</button>
     </div>
@@ -272,10 +273,10 @@ function rGrupo(titulo, items, colorClass) {
 /* ── Resumen rápido (badges conteo) ── */
 function rResumen(vencidas, hoy, proximas, completadas) {
   let badges = '';
-  if (vencidas.length  > 0) badges += `<span class="badge bg-red">🔴 ${vencidas.length} vencida${vencidas.length>1?'s':''}</span>`;
-  if (hoy.length       > 0) badges += `<span class="badge bg-gold">🟡 ${hoy.length} hoy</span>`;
-  if (proximas.length  > 0) badges += `<span class="badge bg-green">🟢 ${proximas.length} próxima${proximas.length>1?'s':''}</span>`;
-  if (completadas.length > 0) badges += `<span class="badge bg-gray">✓ ${completadas.length} completada${completadas.length>1?'s':''}</span>`;
+  if (vencidas.length > 0) badges += `<span class="badge bg-red">🔴 ${vencidas.length} vencida${vencidas.length > 1 ? 's' : ''}</span>`;
+  if (hoy.length > 0) badges += `<span class="badge bg-gold">🟡 ${hoy.length} hoy</span>`;
+  if (proximas.length > 0) badges += `<span class="badge bg-green">🟢 ${proximas.length} próxima${proximas.length > 1 ? 's' : ''}</span>`;
+  if (completadas.length > 0) badges += `<span class="badge bg-gray">✓ ${completadas.length} completada${completadas.length > 1 ? 's' : ''}</span>`;
   if (!badges) return '';
   return `<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:1rem">${badges}</div>`;
 }
@@ -285,15 +286,15 @@ function render() {
   const tareas = loadTareas();
 
   /* Separar por estado/urgencia */
-  const pendientes  = tareas.filter(t => !t.done);
-  const completadas = tareas.filter(t =>  t.done);
+  const pendientes = tareas.filter(t => !t.done);
+  const completadas = tareas.filter(t => t.done);
 
   /* Ordenar pendientes por fecha MÁS PRÓXIMA primero (vencidas antes = fecha menor) */
   pendientes.sort((a, b) => new Date(a.fecha) - new Date(b.fecha));
 
-  const vencidas = pendientes.filter(t => diffDays(t.fecha) <  0);
-  const hoy_arr  = pendientes.filter(t => diffDays(t.fecha) === 0);
-  const proximas = pendientes.filter(t => diffDays(t.fecha) >  0);
+  const vencidas = pendientes.filter(t => diffDays(t.fecha) < 0);
+  const hoy_arr = pendientes.filter(t => diffDays(t.fecha) === 0);
+  const proximas = pendientes.filter(t => diffDays(t.fecha) > 0);
 
   /* Completadas: las más recientes primero */
   completadas.sort((a, b) => new Date(b.fecha) - new Date(a.fecha));
@@ -305,9 +306,16 @@ function render() {
   </div>
 
   ${addTareaOpen ? rTareaForm() : ''}
-  ${editTareaId  ? rTareaForm(loadTareas().find(t => t.id === editTareaId)) : ''}
+  ${editTareaId ? rTareaForm(loadTareas().find(t => t.id === editTareaId)) : ''}
 
-  ${rResumen(vencidas, hoy_arr, proximas, completadas)}`;
+  ${rResumen(vencidas, hoy_arr, proximas, completadas)}
+
+  ${tareas.length > 0 ? `
+  <div style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--text-3);margin-bottom:12px;flex-wrap:wrap">
+    Ordenar:
+    <button class="btn sm${tareasSort === 'proximas' ? ' active' : ''}" onclick="tareasSort='proximas';render()">📅 Más próximas primero</button>
+    <button class="btn sm${tareasSort === 'vencimiento' ? ' active' : ''}" onclick="tareasSort='vencimiento';render()">🔴 Vencidas primero</button>
+  </div>` : ''}`;
 
   /* Sin tareas */
   if (tareas.length === 0 && !addTareaOpen) {
@@ -321,7 +329,7 @@ function render() {
     return;
   }
 
-  /* Grupos de pendientes */
+  /* Grupos de pendientes — orden según tareasSort */
   if (pendientes.length === 0 && !addTareaOpen) {
     html += `
     <div class="empty">
@@ -329,10 +337,18 @@ function render() {
       <strong>¡Todo al día!</strong>
       <div style="font-size:13px;margin-top:4px">No hay tareas pendientes.</div>
     </div>`;
+  } else if (tareasSort === 'vencimiento') {
+    // Modo "vencidas primero": un único listado cronológico (pasado → futuro)
+    const todasPendientes = [...pendientes].sort((a, b) => new Date(a.fecha) - new Date(b.fecha));
+    html += rGrupo('🔴 Vencidas', vencidas, 'red');
+    html += rGrupo('🟡 Hoy', hoy_arr, 'gold');
+    html += rGrupo('🟢 Próximas', proximas, 'green');
+    void todasPendientes; // ya agrupadas arriba en orden cronológico natural
   } else {
-    html += rGrupo('🔴 Vencidas',  vencidas, 'red');
-    html += rGrupo('🟡 Hoy',       hoy_arr,  'gold');
-    html += rGrupo('🟢 Próximas',  proximas, 'green');
+    // Modo "próximas primero": hoy → próximas → vencidas
+    html += rGrupo('🟡 Hoy', hoy_arr, 'gold');
+    html += rGrupo('🟢 Próximas', proximas, 'green');
+    html += rGrupo('🔴 Vencidas', vencidas, 'red');
   }
 
   /* Completadas en <details> plegable */

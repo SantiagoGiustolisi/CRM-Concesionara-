@@ -29,6 +29,8 @@ function addClient(e) {
   });
   addClientOpen = false;
   checkBirthdayAlerts();
+  /* ── Alerta automática: nuevo cliente cargado ── */
+  _alertaClienteNuevo(S.clients[0]);
   save();
   render();
   toast('Cliente agregado correctamente', 'success');
@@ -69,6 +71,40 @@ function delClient(id) {
   if (!confirm('¿Eliminar este cliente? Esta acción no se puede deshacer.')) return;
   S.clients = S.clients.filter(c=>c.id!==id);
   save(); render();
+}
+
+/* ── Alerta automática al cargar un cliente nuevo ── */
+function _alertaClienteNuevo(cliente) {
+  if (!cliente) return;
+  // Evitar duplicado si ya existe alerta para este cliente en el día de hoy
+  const yaExiste = S.alertas.some(a =>
+    a.tipo === 'general' &&
+    a.refId === cliente.id &&
+    a.date  === today()
+  );
+  if (yaExiste) return;
+
+  // Armar descripción con los intereses del cliente
+  const intereses = [
+    cliente.brand  ? `Marca: ${cliente.brand}`                       : null,
+    cliente.model  ? `Modelo: ${cliente.model}`                      : null,
+    cliente.tipo   ? `Tipo: ${cliente.tipo}`                         : null,
+    cliente.budget ? `Presupuesto: $${parseInt(cliente.budget).toLocaleString('es-AR')}` : null,
+  ].filter(Boolean).join(' · ');
+
+  S.alertas.unshift({
+    id:          uid(),
+    tipo:        'general',
+    titulo:      `👤 Nuevo cliente: ${cliente.name}`,
+    descripcion: `Tel: ${cliente.phone}${intereses ? ' · ' + intereses : ''}`,
+    fecha:       todayISO(),
+    creadoPor:   'Sistema',
+    done:        false,
+    date:        today(),
+    refId:       cliente.id,
+    refPhone:    cliente.phone,
+    refName:     cliente.name,
+  });
 }
 
 /* ── Formulario ── */
