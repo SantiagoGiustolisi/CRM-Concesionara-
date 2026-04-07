@@ -84,7 +84,8 @@ function addAlerta(e) {
     titulo:      f.titulo.value.trim(),
     descripcion: f.descripcion.value.trim(),
     fecha:       f.fecha.value,
-    creadoPor:   getSession().nombre,
+    creadoPor:    getSession().nombre,
+    fechaCreacion: todayISO(),
     done:        false,
     date:        today(),
   });
@@ -97,7 +98,11 @@ function addAlerta(e) {
  
 function marcarAlerta(id, done) {
   const a = S.alertas.find(x => x.id === id);
-  if (a) a.done = done;
+  if (a) {
+    a.done = done;
+    a.marcadoPor   = getSession().nombre;
+    a.fechaMarcado = todayISO();
+  }
   save(); render();
 }
  
@@ -163,7 +168,7 @@ function rAlertItem(a) {
       <div class="alert-sub">
         ${a.descripcion ? esc(a.descripcion) : ''}
         ${a.fecha ? ' · ' + a.fecha : ''}
-        · Por <strong>${esc(a.creadoPor)}</strong>
+        · Creada por <strong>${esc(a.creadoPor)}</strong>${a.fechaCreacion ? ' el ' + a.fechaCreacion : ''}${a.done && a.marcadoPor ? ' · Completada por <strong>' + esc(a.marcadoPor) + '</strong>' + (a.fechaMarcado ? ' el ' + a.fechaMarcado : '') : ''}
       </div>
     </div>
     <div class="alert-actions">

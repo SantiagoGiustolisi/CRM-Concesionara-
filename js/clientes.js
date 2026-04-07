@@ -16,6 +16,7 @@ function addClient(e) {
     email:       f.email.value.trim(),
     fechaCumple: f.fechaCumple.value,
     creadoPor:   getSession().nombre,
+    fechaCreacion: todayISO(),
     brand:       f.brand.value.trim(),
     model:       f.model.value.trim(),
     tipo:        f.tipo.value,
@@ -29,7 +30,6 @@ function addClient(e) {
   });
   addClientOpen = false;
   checkBirthdayAlerts();
-  /* ── Alerta automática: nuevo cliente cargado ── */
   _alertaClienteNuevo(S.clients[0]);
   save();
   render();
@@ -53,6 +53,8 @@ function saveEditClient(e) {
   cl.yearMin     = f.yearMin.value ? +f.yearMin.value : null;
   cl.yearMax     = f.yearMax.value ? +f.yearMax.value : null;
   cl.notes       = f.notes.value.trim();
+  cl.editadoPor  = getSession().nombre;
+  cl.fechaEdicion = todayISO();
   editClientId   = null;
   save();
   render();
@@ -64,7 +66,7 @@ function cancelEdit()   { editClientId=null; render(); }
 
 function setClientStatus(id, st) {
   const c = S.clients.find(x=>x.id===id);
-  if (c) c.status = st;
+  if (c) { c.status = st; c.editadoPor = getSession().nombre; c.fechaEdicion = todayISO(); }
   save(); render();
 }
 function delClient(id) {
@@ -76,7 +78,6 @@ function delClient(id) {
 /* ── Alerta automática al cargar un cliente nuevo ── */
 function _alertaClienteNuevo(cliente) {
   if (!cliente) return;
-  // Evitar duplicado si ya existe alerta para este cliente en el día de hoy
   const yaExiste = S.alertas.some(a =>
     a.tipo === 'general' &&
     a.refId === cliente.id &&
@@ -84,7 +85,6 @@ function _alertaClienteNuevo(cliente) {
   );
   if (yaExiste) return;
 
-  // Armar descripción con los intereses del cliente
   const intereses = [
     cliente.brand  ? `Marca: ${cliente.brand}`                       : null,
     cliente.model  ? `Modelo: ${cliente.model}`                      : null,
@@ -96,7 +96,7 @@ function _alertaClienteNuevo(cliente) {
     id:          uid(),
     tipo:        'general',
     titulo:      `👤 Nuevo cliente: ${cliente.name}`,
-    descripcion: `Tel: ${cliente.phone}${intereses ? ' · ' + intereses : ''}`,
+    descripcion: `Tel: ${cliente.phone}${intereses ? ' · ' + intereses : ''} · Cargado por: ${cliente.creadoPor}`,
     fecha:       todayISO(),
     creadoPor:   'Sistema',
     done:        false,
@@ -105,6 +105,15 @@ function _alertaClienteNuevo(cliente) {
     refPhone:    cliente.phone,
     refName:     cliente.name,
   });
+}
+
+/* ── Helper: línea de auditoría ── */
+function rAuditoria(c) {
+  const partes = [];
+  if (c.creadoPor) partes.push(`Cargado por <strong>${esc(c.creadoPor)}</strong>${c.fechaCreacion ? ' el ' + c.fechaCreacion : (c.date ? ' el ' + c.date : '')}`);
+  if (c.editadoPor) partes.push(`Editado por <strong>${esc(c.editadoPor)}</strong>${c.fechaEdicion ? ' el ' + c.fechaEdicion : ''}`);
+  if (!partes.length) return '';
+  return `<div style="font-size:11px;color:var(--text-3);margin-top:3px">${partes.join(' · ')}</div>`;
 }
 
 /* ── Formulario ── */
@@ -125,7 +134,7 @@ function rClientForm(cl) {
           <div class="fg"><label>Email</label><input type="email" name="email" placeholder="juan@email.com" value="${edit&&cl.email?esc(cl.email):''}"></div>
           <div class="fg"><label>Fecha de cumpleaños</label><input type="date" name="fechaCumple" value="${edit&&cl.fechaCumple?cl.fechaCumple:''}"></div>
         </div>
-        ${edit&&cl.creadoPor?`<div style="font-size:12px;color:var(--text-3)">Cargado por: <strong style="color:var(--text-2)">${esc(cl.creadoPor)}</strong></div>`:''}
+        ${edit ? rAuditoria(cl) : ''}
       </div>
 
       <div class="hint-box">
@@ -194,7 +203,6 @@ function render() {
     <div style="font-size:13px;margin-top:4px">Registrá clientes interesados para empezar a hacer matches.</div>
   </div>`:'' }`;
 
-  /* Clientes activos */
   active.forEach(c => {
     if (editClientId===c.id) return;
     const ms       = matchesForClient(c);
@@ -212,12 +220,8 @@ function render() {
               <div style="font-size:12px;color:var(--text-2)">
                 ${c.phone}
                 ${c.email?` · ${esc(c.email)}`:''}
-                · Cargado ${c.date}
-                ${c.creadoPor?` · por <strong>${esc(c.creadoPor)}</strong>`:''}
               </div>
-              ${c.fechaCumple?`<div style="font-size:11px;color:var(--text-3);margin-top:2px">
-                ${bdToday?'🎁 Cumpleaños hoy':bd!==null&&bd<=7?`🎂 Cumpleaños en ${bd} día${bd!==1?'s':''}`:''}
-              </div>`:''}
+              ${rAuditoria(c)}
             </div>
             <div style="display:flex;gap:5px;flex-wrap:wrap;align-items:center">
               ${ms.length>0?`<span class="badge bg-green">${ms.length} auto${ms.length>1?'s':''} disponible${ms.length>1?'s':''}</span>`:''}
@@ -235,7 +239,6 @@ function render() {
             <div class="row" style="padding:6px 0;border-top:1px solid var(--border)">
               <div style="flex:1;min-width:0">
                 <div style="font-size:13px;font-weight:500">${esc(car.brand)} ${esc(car.model)} <span style="color:var(--text-3)">${car.year}</span></div>
-                <div style="font-size:12px;color:var(--text-2)">${fp(car.price)}</div>
               </div>
               ${rScoreRow(car.sc)}
               <button class="btn sm" onclick="showMatchDetail('${c.id}','${car.id}')" style="border-color:var(--gold-border);color:var(--gold)">Ver match</button>
@@ -256,7 +259,6 @@ function render() {
     </div>`;
   });
 
-  /* Inactivos */
   if (inactive.length > 0) {
     html += `
     <details style="margin-top:1.25rem">
@@ -270,6 +272,7 @@ function render() {
               <div>
                 <div style="font-weight:500">${esc(c.name)}</div>
                 <div style="font-size:12px;color:var(--text-3)">${c.phone}</div>
+                ${rAuditoria(c)}
               </div>
             </div>
             <div style="display:flex;gap:6px;align-items:center">

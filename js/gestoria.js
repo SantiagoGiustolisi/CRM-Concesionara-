@@ -135,6 +135,7 @@ function renderGestoriaModal() {
           cursor:pointer;user-select:none">
           ${esc(item.label)}
         </div>
+        ${checked && iv.marcadoPor ? `<div style="font-size:10px;color:var(--green);margin-top:-6px;margin-bottom:4px">✓ Marcado por <strong>${esc(iv.marcadoPor)}</strong>${iv.fecha ? ' · ' + iv.fecha : ''}</div>` : ''}
         ${item.desc ? `<div style="font-size:11px;color:var(--text-3);margin-bottom:10px">${esc(item.desc)}</div>` : ''}
  
         <!-- BOTÓN SOLICITAR TURNO: visible solo cuando el ítem NO está chequeado -->
@@ -201,7 +202,11 @@ function renderGestoriaModal() {
  
       <!-- Footer fijo -->
       <div style="padding:1rem 1.75rem;border-top:1px solid var(--border);flex-shrink:0;display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap">
-        <span style="font-size:12px;color:var(--text-3)">Los cambios se guardan automáticamente.</span>
+        <span id="gestoria-guardado-info" style="font-size:12px;color:var(--text-3)"></span>
+        <div style="display:flex;gap:8px">
+          <button class="btn" onclick="closeGestoriaModal()">Cerrar</button>
+          <button class="btn primary" onclick="guardarGestoria()">💾 Guardar gestoría</button>
+        </div>
       </div>
     </div>
   </div>`;
@@ -211,6 +216,20 @@ function renderGestoriaModal() {
   document.body.appendChild(el.firstElementChild);
 }
  
+/* ── Guardar gestoría con auditoría ── */
+function guardarGestoria() {
+  const car = S.cars.find(c => c.id === gestoriaCarId);
+  if (!car) return;
+  const g = getGestoria(car);
+  g.ultimoGuardadoPor  = getSession().nombre;
+  g.fechaUltimoGuardado = todayISO();
+  autoUpdateEstado(car);
+  save();
+  toast('Gestoría guardada por ' + getSession().nombre, 'success');
+  closeGestoriaModal();
+  renderVehiculosList();
+}
+
 /* ── Acciones del checklist ── */
 function toggleItem(key) {
   const car = S.cars.find(c => c.id === gestoriaCarId);
@@ -218,7 +237,12 @@ function toggleItem(key) {
   const g = getGestoria(car);
   if (!g.items[key]) g.items[key] = { checked: false, fecha: '', obs: '' };
   g.items[key].checked = !g.items[key].checked;
-  if (g.items[key].checked && !g.items[key].fecha) g.items[key].fecha = todayISO();
+  if (g.items[key].checked) {
+    if (!g.items[key].fecha) g.items[key].fecha = todayISO();
+    g.items[key].marcadoPor = getSession().nombre;
+  } else {
+    g.items[key].marcadoPor = null;
+  }
   autoUpdateEstado(car);
   save();
  
@@ -261,6 +285,7 @@ function setItemObs(key, val) {
   if (!car) return;
   const g = getGestoria(car);
   if (!g.items[key]) g.items[key] = { checked: false, fecha: '', obs: '' };
+  g.items[key].obsEditadoPor = getSession().nombre;
   g.items[key].obs = val;
   save();
 }
@@ -333,6 +358,7 @@ function renderVerGestoria() {
       </div>
       <div style="flex:1;min-width:0">
         <span style="font-size:13px;color:${checked ? 'var(--text)' : 'var(--text-3)'};font-weight:${checked ? '500' : '400'}">${esc(item.label)}</span>
+        ${checked && iv.marcadoPor ? `<div style="font-size:10px;color:var(--green);margin-top:2px">por <strong>${esc(iv.marcadoPor)}</strong>${iv.fecha ? ' · ' + iv.fecha : ''}</div>` : ''}
         ${iv.obs ? `<div style="font-size:11px;color:var(--text-3);margin-top:2px;font-style:italic">"${esc(iv.obs)}"</div>` : ''}
       </div>
       <span style="font-size:10px;font-weight:600;flex-shrink:0;padding:2px 8px;border-radius:100px;
@@ -501,6 +527,9 @@ function renderVehiculosList() {
         <div style="display:flex;flex-direction:column;align-items:flex-end;gap:8px;flex-shrink:0">
           <div style="text-align:right">
             <div style="font-size:13px;font-weight:600;color:${progColor};line-height:1">${prog.done}/${prog.total} items</div>
+            ${g && g.ultimoGuardadoPor
+              ? `<div style="font-size:10px;color:var(--text-3);margin-top:3px">por <strong style="color:var(--text-2)">${esc(g.ultimoGuardadoPor)}</strong>${g.fechaUltimoGuardado ? ' · ' + g.fechaUltimoGuardado : ''}</div>`
+              : `<div style="font-size:10px;color:var(--text-3);margin-top:3px">Sin gestión guardada</div>`}
           </div>
           <div style="display:flex;gap:6px">
             <button class="btn sm" onclick="openVerGestoria('${car.id}')">👁 Ver gestoría</button>
@@ -687,26 +716,11 @@ function render() {
     <div class="section-title">Gestoría</div>
   </div>
  
-  <div class="tabs">
-    <button class="tab-btn${activeTab === 'vehiculos' ? ' active' : ''}" onclick="activeTab='vehiculos';render()">
-      🚗 Gestoría de Vehículos
-      ${S.cars.filter(c => !c.gestoria || c.gestoria.estado !== 'completa').length > 0
-        ? `<span style="display:inline-block;background:var(--orange);color:#fff;font-size:9px;border-radius:100px;padding:1px 6px;margin-left:5px;font-weight:700">${S.cars.filter(c => !c.gestoria || c.gestoria.estado !== 'completa').length}</span>`
-        : ''}
-    </button>
-    <button class="tab-btn${activeTab === 'equipo' ? ' active' : ''}" onclick="activeTab='equipo';render()">
-      ◈ Equipo
-    </button>
-  </div>
- 
-  <div id="tab-vehiculos-content" style="${activeTab === 'vehiculos' ? '' : 'display:none'}"></div>
-  <div id="tab-equipo-content"    style="${activeTab === 'equipo'    ? '' : 'display:none'}"></div>`;
- 
-  if (activeTab === 'vehiculos') renderVehiculosList();
-  if (activeTab === 'equipo')    renderEquipoTab();
+  <div id="tab-vehiculos-content"></div>`;
+
+  renderVehiculosList();
 }
  
 /* ── Boot ── */
 bootApp('gestoria');
 render();
- 

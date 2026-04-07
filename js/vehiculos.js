@@ -35,6 +35,7 @@ function addCar(e) {
     status:          'disponible',
     date:            today(),
     creadoPor:       getSession().nombre,
+    fechaCreacion:   todayISO(),
     peritaje:        {},
   };
   S.cars.unshift(car);
@@ -71,6 +72,8 @@ function saveEditCar(e) {
   car.itvVenc         = f.itvVenc.value;
   car.carpetaEntregada= f.carpetaEntregada.checked;
   car.nota            = f.nota.value.trim();
+  car.editadoPor      = getSession().nombre;
+  car.fechaEdicion    = todayISO();
   editCarId   = null;
   lastMatches = null;
   save();
@@ -83,7 +86,7 @@ function cancelEditCar(){ editCarId=null; render(); }
 
 function setCarStatus(id, st) {
   const c = S.cars.find(x=>x.id===id);
-  if (c) c.status = st;
+  if (c) { c.status = st; c.editadoPor = getSession().nombre; c.fechaEdicion = todayISO(); }
   save(); render();
 }
 function delCar(id) {
@@ -93,6 +96,15 @@ function delCar(id) {
   save(); render();
 }
 
+/* ── Helper: línea de auditoría ── */
+function rAuditoriaAuto(car) {
+  const partes = [];
+  if (car.creadoPor) partes.push(`Cargado por <strong>${esc(car.creadoPor)}</strong>${car.fechaCreacion ? ' el ' + car.fechaCreacion : (car.date ? ' el ' + car.date : '')}`);
+  if (car.editadoPor) partes.push(`Editado por <strong>${esc(car.editadoPor)}</strong>${car.fechaEdicion ? ' el ' + car.fechaEdicion : ''}`);
+  if (!partes.length) return '';
+  return `<div style="font-size:11px;color:var(--text-3);margin-top:2px">${partes.join(' · ')}</div>`;
+}
+
 /* ── Toggle 0km ── */
 function toggleZeroKm(btn) {
   const input  = document.getElementById('kmInput');
@@ -100,7 +112,6 @@ function toggleZeroKm(btn) {
   const isZero = btn.dataset.zero === 'true';
 
   if (isZero) {
-    // Volver a ingreso manual
     btn.dataset.zero      = 'false';
     btn.textContent       = '0 km';
     btn.style.background  = '';
@@ -111,7 +122,6 @@ function toggleZeroKm(btn) {
     input.placeholder     = '45000';
     if (duenio) duenio.style.display = 'block';
   } else {
-    // Activar 0 km
     btn.dataset.zero      = 'true';
     btn.textContent       = '✓ 0 km';
     btn.style.background  = 'var(--green)';
@@ -195,6 +205,7 @@ function rCarForm(car) {
           </div>
           <div class="fg"><label>Color</label><input type="text" name="color" placeholder="Blanco" value="${edit&&car.color?esc(car.color):''}"></div>
         </div>
+        ${edit ? rAuditoriaAuto(car) : ''}
       </div>
 
       <div class="hint-box">
@@ -258,7 +269,7 @@ function rCarForm(car) {
   </div>`;
 }
 
-/* ── Match banner (resultado después de agregar) ── */
+/* ── Match banner ── */
 function rMatchBanner() {
   if (!lastMatches) return '';
   return `
@@ -312,7 +323,6 @@ function render() {
 
     html += `
     <div class="card">
-      <!-- Cabecera del vehículo -->
       <div style="display:flex;justify-content:space-between;align-items:start;margin-bottom:${ms.length?'10px':'0'}">
         <div>
           <div style="font-weight:600;font-size:15px;display:flex;align-items:center;gap:8px;flex-wrap:wrap">
@@ -334,14 +344,13 @@ function render() {
           </div>
           ${!esZeroKm && car.duenioNombre ? `<div style="font-size:11px;color:var(--text-3);margin-top:3px">Dueño ant.: ${esc(car.duenioNombre)} ${esc(car.duenioApellido)}${car.duenioContacto?' · '+esc(car.duenioContacto):''}</div>` : ''}
           ${car.nota?`<div style="font-size:12px;color:var(--text-2);font-style:italic;margin-top:3px">"${esc(car.nota)}"</div>`:''}
-          ${car.creadoPor?`<div style="font-size:11px;color:var(--text-3);margin-top:2px">Cargado por: ${esc(car.creadoPor)}</div>`:''}
+          ${rAuditoriaAuto(car)}
         </div>
         <div style="text-align:right;flex-shrink:0">
           ${ms.length>0?`<span class="badge bg-green" style="margin-top:4px">${ms.length} match${ms.length>1?'es':''}</span>`:`<span class="badge bg-gray" style="margin-top:4px">Sin matches</span>`}
         </div>
       </div>
 
-      <!-- Matches -->
       ${ms.length>0?`
       <div class="sep" style="padding-top:8px;margin-top:0">
         <div style="font-size:12px;color:var(--text-3);margin-bottom:6px">Clientes interesados:</div>
@@ -358,7 +367,6 @@ function render() {
         </div>`).join('')}
       </div>`:''}
 
-      <!-- Acciones -->
       <div class="sep" style="display:flex;gap:6px;justify-content:flex-end;flex-wrap:wrap">
         <a href="peritaje.html?id=${car.id}" class="btn sm" style="${hasPeritaje?'color:var(--gold);border-color:var(--gold-border)':''}">📋 ${hasPeritaje?'Ver peritaje':'Peritaje'}</a>
         <button class="btn sm" onclick="editCar('${car.id}')">Editar</button>
@@ -369,7 +377,6 @@ function render() {
     </div>`;
   });
 
-  /* Vendidos / Reservados */
   if (others.length > 0) {
     html += `
     <details style="margin-top:1.25rem">
@@ -382,6 +389,7 @@ function render() {
               <span style="font-weight:500;color:var(--text-2)">${esc(car.brand)} ${esc(car.model)} ${car.year}</span>
               ${car.patente?`<span style="font-size:11px;color:var(--text-3);margin-left:6px">[${esc(car.patente)}]</span>`:''}
               ${car.km===0?'<span class="badge bg-blue" style="margin-left:6px">0 km</span>':''}
+              ${rAuditoriaAuto(car)}
             </div>
             <div style="display:flex;gap:6px;align-items:center">
               <span class="badge ${car.status==='vendido'?'bg-green':'bg-orange'}">${car.status}</span>
