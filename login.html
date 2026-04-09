@@ -1,78 +1,161 @@
 <!DOCTYPE html>
 <html lang="es">
+
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>NEIFERT CRM — Acceso</title>
   <link rel="stylesheet" href="styles.css">
   <style>
-    body { display:flex; align-items:center; justify-content:center; padding:1rem; min-height:100vh; }
-    .login-wrap { width:100%; max-width:400px; animation: fadeUp .3s ease; }
-    @keyframes fadeUp { from{opacity:0;transform:translateY(12px)} to{opacity:1;transform:translateY(0)} }
-    .logo-wrap { text-align:center; margin-bottom:2.5rem; }
-    .logo-big  { font-family:var(--font-display); font-size:30px; font-weight:600; color:var(--text); }
-    .logo-big span { color:var(--gold); }
-    .logo-sub2 { font-size:11px; letter-spacing:.14em; text-transform:uppercase; color:var(--text-3); margin-top:4px; }
-    .login-card { background:var(--surface); border:1px solid var(--border-md); border-radius:var(--radius-lg); padding:2rem; }
-    .login-title { font-family:var(--font-display); font-size:20px; font-weight:600; margin-bottom:1.5rem; color:var(--text); }
-    .err { background:var(--red-bg); border:1px solid var(--red-border); border-radius:var(--radius);
-      color:var(--red); font-size:13px; padding:10px 12px; margin-bottom:14px; display:none; }
-    .err.show { display:block; }
-    .hint { font-size:11px; color:var(--text-3); text-align:center; margin-top:1rem; }
-    .btn-full { width:100%; margin-top:4px; padding:11px; font-size:13px; }
+    body {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 1rem;
+      min-height: 100vh;
+    }
+
+    .login-wrap {
+      width: 100%;
+      max-width: 400px;
+      animation: fadeUp .3s ease;
+    }
+
+    @keyframes fadeUp {
+      from {
+        opacity: 0;
+        transform: translateY(12px)
+      }
+
+      to {
+        opacity: 1;
+        transform: translateY(0)
+      }
+    }
+
+    .logo-wrap {
+      text-align: center;
+      margin-bottom: 2.5rem;
+    }
+
+    .logo-big {
+      font-family: var(--font-display);
+      font-size: 30px;
+      font-weight: 600;
+      color: var(--text);
+    }
+
+    .logo-big span {
+      color: var(--gold);
+    }
+
+    .logo-sub2 {
+      font-size: 11px;
+      letter-spacing: .14em;
+      text-transform: uppercase;
+      color: var(--text-3);
+      margin-top: 4px;
+    }
+
+    .login-card {
+      background: var(--surface);
+      border: 1px solid var(--border-md);
+      border-radius: var(--radius-lg);
+      padding: 2rem;
+    }
+
+    .login-title {
+      font-family: var(--font-display);
+      font-size: 20px;
+      font-weight: 600;
+      margin-bottom: 1.5rem;
+      color: var(--text);
+    }
+
+    .err {
+      background: var(--red-bg);
+      border: 1px solid var(--red-border);
+      border-radius: var(--radius);
+      color: var(--red);
+      font-size: 13px;
+      padding: 10px 12px;
+      margin-bottom: 14px;
+      display: none;
+    }
+
+    .err.show {
+      display: block;
+    }
+
+    .hint {
+      font-size: 11px;
+      color: var(--text-3);
+      text-align: center;
+      margin-top: 1rem;
+    }
+
+    .btn-full {
+      width: 100%;
+      margin-top: 4px;
+      padding: 11px;
+      font-size: 13px;
+    }
   </style>
 </head>
+
 <body>
-<div class="login-wrap">
-  <div class="logo-wrap">
-    <div class="logo-big">NEIFERT<span>.</span>CRM</div>
-    <div class="logo-sub2">Sistema de Gestión Automotor</div>
-  </div>
-  <div class="login-card">
-    <div class="login-title">Iniciar sesión</div>
-    <div class="err" id="err">Usuario o contraseña incorrectos.</div>
-    <div class="fg">
-      <label>Usuario</label>
-      <input type="text" id="uname" placeholder="tu usuario" autocomplete="username">
+  <div class="login-wrap">
+    <div class="logo-wrap">
+      <div class="logo-big">NEIFERT<span>.</span>CRM</div>
+      <div class="logo-sub2">Sistema de Gestión Automotor</div>
     </div>
-    <div class="fg">
-      <label>Contraseña</label>
-      <input type="password" id="upass" placeholder="••••••••" autocomplete="current-password"
-             onkeydown="if(event.key==='Enter')doLogin()">
+    <div class="login-card">
+      <div class="login-title">Iniciar sesión</div>
+      <div class="err" id="err">Usuario o contraseña incorrectos.</div>
+      <div class="fg">
+        <label>Usuario</label>
+        <input type="text" id="uname" placeholder="tu usuario" autocomplete="username">
+      </div>
+      <div class="fg">
+        <label>Contraseña</label>
+        <input type="password" id="upass" placeholder="••••••••" autocomplete="current-password"
+          onkeydown="if(event.key==='Enter')doLogin()">
+      </div>
+      <button class="btn primary btn-full" onclick="doLogin()">Ingresar</button>
+      <div class="hint">Contactá al administrador si no recordás tu acceso.</div>
     </div>
-    <button class="btn primary btn-full" onclick="doLogin()">Ingresar</button>
-    <div class="hint">Contactá al administrador si no recordás tu acceso.</div>
   </div>
-</div>
-<script>
-  /* ── Usuarios del sistema ── */
-  const USERS = [
-    { user:'admin',  pass:'neifert2024', role:'admin',    nombre:'Administrador'   },
-    { user:'ventas', pass:'ventas123',   role:'vendedor',  nombre:'Equipo Ventas'   },
-    { user:'bruno',  pass:'bruno123',    role:'vendedor',  nombre:'Bruno'           },
-    { user:'nico',   pass:'nico123',     role:'vendedor',  nombre:'Nicolás'         },
-  ];
+  <script>
+    /* ── Usuarios del sistema ── */
+    const USERS = [
+      { user: 'Cristian', pass: 'neifert2024', role: 'admin', nombre: 'Cristian' },
+      { user: 'Juani', pass: 'ventas123', role: 'vendedor', nombre: 'Juani' },
+      { user: 'Bruno', pass: 'bruno321', role: 'vendedor', nombre: 'Bruno' },
+      { user: 'Nico', pass: 'nico132', role: 'vendedor', nombre: 'Nicolás' },
+      { user: 'Victor', pass: 'victor113', role: 'vendedor', nombre: 'Victor' },
+    ];
 
-  /* Si ya hay sesión activa, ir directo al dashboard */
-  if (localStorage.getItem('crm_session')) {
-    window.location.href = 'dashboard.html';
-  }
-
-  function doLogin() {
-    const u = document.getElementById('uname').value.trim().toLowerCase();
-    const p = document.getElementById('upass').value;
-    const found = USERS.find(x => x.user===u && x.pass===p);
-    if (found) {
-      localStorage.setItem('crm_session', JSON.stringify({
-        user: found.user, role: found.role, nombre: found.nombre, ts: Date.now()
-      }));
+    /* Si ya hay sesión activa, ir directo al dashboard */
+    if (localStorage.getItem('crm_session')) {
       window.location.href = 'dashboard.html';
-    } else {
-      document.getElementById('err').classList.add('show');
-      document.getElementById('upass').value = '';
-      document.getElementById('upass').focus();
     }
-  }
-</script>
+
+    function doLogin() {
+      const u = document.getElementById('uname').value.trim().toLowerCase();
+      const p = document.getElementById('upass').value;
+      const found = USERS.find(x => x.user === u && x.pass === p);
+      if (found) {
+        localStorage.setItem('crm_session', JSON.stringify({
+          user: found.user, role: found.role, nombre: found.nombre, ts: Date.now()
+        }));
+        window.location.href = 'dashboard.html';
+      } else {
+        document.getElementById('err').classList.add('show');
+        document.getElementById('upass').value = '';
+        document.getElementById('upass').focus();
+      }
+    }
+  </script>
 </body>
+
 </html>
