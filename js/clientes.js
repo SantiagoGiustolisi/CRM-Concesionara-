@@ -31,6 +31,7 @@ function addClient(e) {
   addClientOpen = false;
   checkBirthdayAlerts();
   _alertaClienteNuevo(S.clients[0]);
+  _alertaCumpleanios(S.clients[0]); /* ← NUEVO: alerta de cumpleaños si tiene fecha */
   save();
   render();
   toast('Cliente agregado correctamente', 'success');
@@ -41,6 +42,7 @@ function saveEditClient(e) {
   const f  = e.target;
   const cl = S.clients.find(c=>c.id===editClientId);
   if (!cl) return;
+  const cumpleAnterior = cl.fechaCumple;
   cl.name        = f.cname.value.trim();
   cl.phone       = f.phone.value.trim();
   cl.email       = f.email.value.trim();
@@ -55,6 +57,12 @@ function saveEditClient(e) {
   cl.notes       = f.notes.value.trim();
   cl.editadoPor  = getSession().nombre;
   cl.fechaEdicion = todayISO();
+
+  /* Si se cargó o cambió el cumpleaños, actualizar la alerta */
+  if (cl.fechaCumple && cl.fechaCumple !== cumpleAnterior) {
+    _alertaCumpleanios(cl, true);
+  }
+
   editClientId   = null;
   save();
   render();
@@ -73,6 +81,48 @@ function delClient(id) {
   if (!confirm('¿Eliminar este cliente? Esta acción no se puede deshacer.')) return;
   S.clients = S.clients.filter(c=>c.id!==id);
   save(); render();
+}
+
+/* ════════════════════════════════════════
+   Alerta de cumpleaños al registrar cliente
+   ════════════════════════════════════════ */
+function _alertaCumpleanios(cliente, forzar) {
+  if (!cliente || !cliente.fechaCumple) return;
+
+  /* Eliminar alerta vieja si se está actualizando */
+  if (forzar) {
+    S.alertas = S.alertas.filter(a =>
+      !(a.tipo === 'birthday' && a.refCumpleId === cliente.id)
+    );
+  }
+
+  /* No crear duplicada */
+  const yaExiste = S.alertas.some(a =>
+    a.tipo === 'birthday' && a.refCumpleId === cliente.id
+  );
+  if (yaExiste) return;
+
+  /* Calcular próximo cumpleaños */
+  const d = new Date(cliente.fechaCumple);
+  const n = new Date();
+  let next = new Date(n.getFullYear(), d.getMonth(), d.getDate());
+  if (next < n) next.setFullYear(next.getFullYear() + 1);
+  const fechaISO = next.toISOString().split('T')[0];
+
+  S.alertas.unshift({
+    id:           uid(),
+    tipo:         'birthday',
+    titulo:       `🎂 Cumpleaños de ${cliente.name}`,
+    descripcion:  `Tel: ${cliente.phone}${cliente.email ? ' · ' + cliente.email : ''} · Fecha: ${cliente.fechaCumple}`,
+    fecha:        fechaISO,
+    creadoPor:    'Sistema',
+    fechaCreacion: todayISO(),
+    done:         false,
+    date:         today(),
+    refCumpleId:  cliente.id,   /* vincula la alerta al cliente */
+    refPhone:     cliente.phone,
+    refName:      cliente.name,
+  });
 }
 
 /* ── Alerta automática al cargar un cliente nuevo ── */
@@ -132,7 +182,11 @@ function rClientForm(cl) {
         </div>
         <div class="fg2">
           <div class="fg"><label>Email</label><input type="email" name="email" placeholder="juan@email.com" value="${edit&&cl.email?esc(cl.email):''}"></div>
-          <div class="fg"><label>Fecha de cumpleaños</label><input type="date" name="fechaCumple" value="${edit&&cl.fechaCumple?cl.fechaCumple:''}"></div>
+          <div class="fg">
+            <label>Fecha de cumpleaños</label>
+            <input type="date" name="fechaCumple" value="${edit&&cl.fechaCumple?cl.fechaCumple:''}">
+            <div style="font-size:10px;color:var(--text-3);margin-top:3px">Se creará una alerta de recordatorio automáticamente</div>
+          </div>
         </div>
         ${edit ? rAuditoria(cl) : ''}
       </div>
@@ -290,6 +344,5 @@ function render() {
   document.getElementById('view').innerHTML = html;
 }
 
-/* ── Boot ── */
 bootApp('clientes');
 render();

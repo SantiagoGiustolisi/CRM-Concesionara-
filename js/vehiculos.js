@@ -291,6 +291,13 @@ function rMatchBanner() {
   </div>`;
 }
 
+/* ── FIX: helper para mostrar precio sin NaN ── */
+function _fPrecio(moneda, precio) {
+  if (!precio || isNaN(precio)) return '<span style="color:var(--text-3);font-style:italic">Sin precio cargado</span>';
+  const m = moneda || 'ARS';
+  return `<span style="color:var(--green)">${m} ${Number(precio).toLocaleString('es-AR')}</span>`;
+}
+
 /* ── Render ── */
 function render() {
   const avail  = S.cars.filter(c=>c.status==='disponible');
@@ -321,6 +328,13 @@ function render() {
     const daysITV     = itvVencida ? Math.ceil((new Date(car.itvVenc)-new Date())/(1000*60*60*24)) : null;
     const esZeroKm    = car.km === 0;
 
+    /* ── Precio a mostrar en la tarjeta: contado primero, canje como fallback ── */
+    const precioDisplay = car.precioContado
+      ? `${car.monedaContado||'ARS'} ${Number(car.precioContado).toLocaleString('es-AR')}`
+      : car.precioCanje
+        ? `${car.monedaCanje||'ARS'} ${Number(car.precioCanje).toLocaleString('es-AR')} (canje)`
+        : null;
+
     html += `
     <div class="card">
       <div style="display:flex;justify-content:space-between;align-items:start;margin-bottom:${ms.length?'10px':'0'}">
@@ -339,8 +353,9 @@ function render() {
             ${car.color?' · '+esc(car.color):''}
           </div>
           <div style="font-size:12px;margin-top:4px;display:flex;gap:12px;flex-wrap:wrap">
-            ${car.precioContado?`<span style="color:var(--green)">Contado: ${car.monedaContado||'ARS'} ${car.precioContado.toLocaleString('es-AR')}</span>`:''}
-            ${car.precioCanje?`<span style="color:var(--blue)">Canje: ${car.monedaCanje||'ARS'} ${car.precioCanje.toLocaleString('es-AR')}</span>`:''}
+            ${car.precioContado?`<span style="color:var(--green)">Contado: ${car.monedaContado||'ARS'} ${Number(car.precioContado).toLocaleString('es-AR')}</span>`:''}
+            ${car.precioCanje?`<span style="color:var(--blue)">Canje: ${car.monedaCanje||'ARS'} ${Number(car.precioCanje).toLocaleString('es-AR')}</span>`:''}
+            ${!car.precioContado && !car.precioCanje ? '<span style="color:var(--text-3);font-style:italic;font-size:11px">Sin precio cargado</span>' : ''}
           </div>
           ${!esZeroKm && car.duenioNombre ? `<div style="font-size:11px;color:var(--text-3);margin-top:3px">Dueño ant.: ${esc(car.duenioNombre)} ${esc(car.duenioApellido)}${car.duenioContacto?' · '+esc(car.duenioContacto):''}</div>` : ''}
           ${car.nota?`<div style="font-size:12px;color:var(--text-2);font-style:italic;margin-top:3px">"${esc(car.nota)}"</div>`:''}
@@ -348,6 +363,7 @@ function render() {
         </div>
         <div style="text-align:right;flex-shrink:0">
           ${ms.length>0?`<span class="badge bg-green" style="margin-top:4px">${ms.length} match${ms.length>1?'es':''}</span>`:`<span class="badge bg-gray" style="margin-top:4px">Sin matches</span>`}
+          ${precioDisplay ? `<div style="font-size:11px;color:var(--text-3);margin-top:4px">${precioDisplay}</div>` : ''}
         </div>
       </div>
 
@@ -369,6 +385,7 @@ function render() {
 
       <div class="sep" style="display:flex;gap:6px;justify-content:flex-end;flex-wrap:wrap">
         <a href="peritaje.html?id=${car.id}" class="btn sm" style="${hasPeritaje?'color:var(--gold);border-color:var(--gold-border)':''}">📋 ${hasPeritaje?'Ver peritaje':'Peritaje'}</a>
+        ${itvVencida ? `<button class="btn sm" style="border-color:var(--gold-border);color:var(--gold)" onclick="solicitarTurnoITV('${car.id}')">📅 Turno ITV</button>` : ''}
         <button class="btn sm" onclick="editCar('${car.id}')">Editar</button>
         <button class="btn sm" onclick="setCarStatus('${car.id}','reservado')">Reservar</button>
         <button class="btn sm success" onclick="setCarStatus('${car.id}','vendido')">Vendido</button>

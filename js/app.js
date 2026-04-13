@@ -67,6 +67,7 @@ function load() {
 
 /* ── Helpers generales ── */
 function fp(n) { return '$' + parseInt(n).toLocaleString('es-AR'); }
+function carPrice(car) { return car.precioContado || car.precioCanje || null; }
 function fk(n) { return parseInt(n).toLocaleString('es-AR') + ' km'; }
 function ini(nm) { return String(nm).trim().split(/\s+/).map(w => w[0] || '').join('').toUpperCase().slice(0, 2); }
 function uid() { return Date.now().toString(36) + Math.random().toString(36).slice(2); }
@@ -81,12 +82,31 @@ function isBirthdayToday(dateStr) {
   const d = new Date(dateStr), n = new Date();
   return d.getMonth() === n.getMonth() && d.getDate() === n.getDate();
 }
+function isBirthdayTomorrow(dateStr) {
+  if (!dateStr) return false;
+  const d = new Date(dateStr);
+  const tom = new Date(); tom.setDate(tom.getDate() + 1);
+  return d.getMonth() === tom.getMonth() && d.getDate() === tom.getDate();
+}
 function daysUntil(dateStr) {
   if (!dateStr) return null;
   const d = new Date(dateStr), n = new Date();
   let next = new Date(n.getFullYear(), d.getMonth(), d.getDate());
   if (next < n) next.setFullYear(next.getFullYear() + 1);
   return Math.ceil((next - n) / (1000 * 60 * 60 * 24));
+}
+
+/* ── Solicitar turno ITV (redirige a alertas.html con prefill) ── */
+function solicitarTurnoITV(carId) {
+  const car = S.cars.find(c => c.id === carId);
+  const contexto = {
+    tipo: 'turno',
+    info: car
+      ? `ITV pendiente/vencida — ${car.brand} ${car.model} ${car.year}${car.patente ? ' · Patente: ' + car.patente : ''}${car.itvVenc ? ' · Fecha: ' + car.itvVenc : ''}`
+      : 'Turno ITV',
+  };
+  sessionStorage.setItem('alertas_prefill', JSON.stringify(contexto));
+  window.location.href = 'alertas.html';
 }
 
 /* ── WhatsApp ── */
@@ -195,9 +215,10 @@ function renderHeader(activePage) {
 function score(client, car) {
   let possible = 0, earned = 0;
   if (client.budget) {
-    if (car.price > client.budget * 1.10) return -1;
+    const price = carPrice(car);
+    if (price !== null && price > client.budget * 1.10) return -1;
     possible += WEIGHTS.budget;
-    if (car.price <= client.budget) earned += WEIGHTS.budget;
+    if (price === null || price <= client.budget) earned += WEIGHTS.budget;
     else earned += Math.round(WEIGHTS.budget * 0.4);
   }
   if (client.tipo) {
@@ -258,12 +279,14 @@ function matchDetail(client, car) {
   const checks = [];
   if (client.tipo) checks.push({ label: 'Tipo', client: client.tipo, car: car.tipo, ok: car.tipo === client.tipo, weight: WEIGHTS.tipo, critical: true });
   if (client.budget) {
-    const diff = car.price - client.budget;
+    const price = carPrice(car);
+    const carPriceLabel = price !== null ? fp(price) : 'Sin precio';
     let ok, warn = null;
-    if (car.price <= client.budget) ok = true;
-    else if (car.price <= client.budget * 1.10) { ok = 'partial'; warn = `+${fp(diff)} sobre el budget`; }
+    if (price === null) { ok = 'partial'; warn = 'El auto no tiene precio cargado'; }
+    else if (price <= client.budget) ok = true;
+    else if (price <= client.budget * 1.10) { ok = 'partial'; warn = `+${fp(price - client.budget)} sobre el budget`; }
     else { ok = false; warn = 'Supera el budget en más del 10%'; }
-    checks.push({ label: 'Presupuesto', client: fp(client.budget), car: fp(car.price), ok, warn, weight: WEIGHTS.budget, critical: true });
+    checks.push({ label: 'Presupuesto', client: fp(client.budget), car: carPriceLabel, ok, warn, weight: WEIGHTS.budget, critical: true });
   }
   if (client.brand) {
     const cb = client.brand.toLowerCase().trim(), carB = car.brand.toLowerCase().trim();
@@ -365,15 +388,31 @@ function closeMatchDetail() { const el = document.getElementById('match-detail-o
 
 /* ── Generación automática de alertas ── */
 function checkBirthdayAlerts() {
+  const tom = new Date(); tom.setDate(tom.getDate() + 1);
+  const tomorrowISO = tom.toISOString().split('T')[0];
+
   S.clients.forEach(c => {
     if (!c.fechaCumple) return;
+
+    // Alerta el día del cumpleaños
     if (isBirthdayToday(c.fechaCumple)) {
-      const exists = S.alertas.some(a => a.tipo === 'birthday' && a.refId === c.id && a.date === today());
+      const exists = S.alertas.some(a => a.tipo === 'birthday' && a.refId === c.id && a.fecha === todayISO());
       if (!exists) S.alertas.unshift({
         id: uid(), tipo: 'birthday',
-        titulo: `🎉 Cumpleaños de ${c.name}`,
-        descripcion: `Hoy es el cumpleaños de ${c.name}. Teléfono: ${c.phone}`,
+        titulo: `🎉 Hoy es el cumpleaños de ${c.name}`,
+        descripcion: `¡Hoy cumple años ${c.name}! Mandále un saludo. Teléfono: ${c.phone}`,
         fecha: todayISO(), creadoPor: 'Sistema', done: false, date: today(), refId: c.id, refPhone: c.phone, refName: c.name
+      });
+    }
+
+    // Alerta el día anterior
+    if (isBirthdayTomorrow(c.fechaCumple)) {
+      const exists = S.alertas.some(a => a.tipo === 'birthday' && a.refId === c.id && a.fecha === tomorrowISO);
+      if (!exists) S.alertas.unshift({
+        id: uid(), tipo: 'birthday',
+        titulo: `🎂 Mañana es el cumpleaños de ${c.name}`,
+        descripcion: `Mañana cumple años ${c.name}. Preparate para mandarle un saludo. Teléfono: ${c.phone}`,
+        fecha: tomorrowISO, creadoPor: 'Sistema', done: false, date: today(), refId: c.id, refPhone: c.phone, refName: c.name
       });
     }
   });

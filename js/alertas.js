@@ -236,7 +236,7 @@ function _getTareasProximas() {
     .filter(t => {
       if (t.done) return false;
       const d = _diffDays(t.fecha);
-      return d !== null && d >= 0 && d <= 2;
+      return d !== null && d >= 0 && d <= 1;
     })
     .sort((a, b) => new Date(a.fecha) - new Date(b.fecha));
 }
@@ -247,7 +247,7 @@ function rTareasProximas() {
 
   const items = tareas.map(t => {
     const d = _diffDays(t.fecha);
-    const label = d === 0 ? 'Hoy' : d === 1 ? 'Mañana' : 'En 2 días';
+    const label = d === 0 ? 'Hoy' : 'Mañana';
     const color = d === 0 ? 'var(--gold)' : 'var(--green)';
     const badge = d === 0 ? 'bg-gold' : 'bg-green';
     return `
@@ -274,7 +274,7 @@ function rTareasProximas() {
     <div style="font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;
                 color:var(--text-3);margin-bottom:8px;padding-bottom:4px;
                 border-bottom:1px solid var(--border)">
-      📋 Tareas próximas (hoy y mañana)
+      📋 Tareas (hoy y mañana)
     </div>
     ${items}
   </div>`;
@@ -291,7 +291,7 @@ function _getCumpleaniosProximos() {
       diasHasta: _diasHastaCumple(c.fechaCumple),
       edad: _calcEdad(c.fechaCumple),
     }))
-    .filter(c => c.diasHasta !== null && c.diasHasta >= 0 && c.diasHasta <= 7)
+    .filter(c => c.diasHasta !== null && c.diasHasta >= 0 && c.diasHasta <= 1)
     .sort((a, b) => a.diasHasta - b.diasHasta);
 }
 
@@ -332,7 +332,7 @@ function rCumpleanios() {
     <div style="font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;
                 color:var(--text-3);margin-bottom:8px;padding-bottom:4px;
                 border-bottom:1px solid var(--border)">
-      🎂 Cumpleaños próximos (7 días)
+      🎂 Cumpleaños (hoy y mañana)
     </div>
     ${items}
   </div>`;

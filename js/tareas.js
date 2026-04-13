@@ -1,63 +1,28 @@
 /* ═══════════════════════════════════════════════════════════════
    NEIFERT CRM — js/tareas.js
-   Módulo de gestión de tareas con asociación a clientes.
-
-   Persistencia: localStorage key → 'crm_tareas'
-   Estructura de cada tarea:
-   {
-     id:          string  — uid()
-     titulo:      string  — texto corto obligatorio
-     descripcion: string  — detalle opcional
-     fecha:       string  — ISO 'YYYY-MM-DD' obligatoria
-     clienteId:   string|null — id del cliente de S.clients (opcional)
-     clienteNombre: string|null — cacheado para display sin cruzar cada vez
-     creadoPor:   string  — nombre de sesión
-     done:        boolean
-     createdAt:   string  — todayISO()
-   }
-
-   Relación con clientes:
-   - Al crear/editar una tarea el usuario puede seleccionar un cliente
-     del <select> que se puebla desde S.clients (cargado por app.js).
-   - Se guarda tanto el id (clienteId) como el nombre (clienteNombre)
-     para mostrar sin tener que buscar cada vez, tolerando que el
-     cliente sea eliminado después.
    ═══════════════════════════════════════════════════════════════ */
 
-/* ── Estado local del módulo ── */
 let addTareaOpen = false;
 let editTareaId = null;
-let tareasSort = 'proximas'; // 'proximas' | 'vencimiento'
+let tareasSort = 'proximas';
 
-/* ── Clave de localStorage ── */
 const TAREAS_KEY = 'crm_tareas';
 
-/* ── Carga / guardado propio (las tareas NO van en S para no
-   contaminar app.js; se manejan de forma independiente) ── */
 function loadTareas() {
-  try {
-    return JSON.parse(localStorage.getItem(TAREAS_KEY) || '[]');
-  } catch { return []; }
+  try { return JSON.parse(localStorage.getItem(TAREAS_KEY) || '[]'); }
+  catch { return []; }
 }
 function saveTareas(tareas) {
-  try {
-    localStorage.setItem(TAREAS_KEY, JSON.stringify(tareas));
-  } catch (e) { console.warn('Error guardando tareas:', e); }
+  try { localStorage.setItem(TAREAS_KEY, JSON.stringify(tareas)); }
+  catch (e) { console.warn('Error guardando tareas:', e); }
 }
 
-/* ── Helpers de fecha ── */
-
-/**
- * Diferencia en días entre hoy (00:00) y una fecha ISO.
- * Negativo = pasada, 0 = hoy, positivo = futura.
- */
 function diffDays(isoDate) {
   const hoy = new Date(); hoy.setHours(0, 0, 0, 0);
   const fecha = new Date(isoDate + 'T00:00:00');
   return Math.round((fecha - hoy) / (1000 * 60 * 60 * 24));
 }
 
-/** Etiqueta legible de la fecha */
 function labelFecha(isoDate) {
   const d = diffDays(isoDate);
   if (d < 0) return `Venció hace ${Math.abs(d)} día${Math.abs(d) > 1 ? 's' : ''}`;
@@ -66,7 +31,6 @@ function labelFecha(isoDate) {
   return new Date(isoDate + 'T00:00:00').toLocaleDateString('es-AR', { day: 'numeric', month: 'short', year: 'numeric' });
 }
 
-/** Clasificación visual según urgencia */
 function urgencia(isoDate, done) {
   if (done) return 'done';
   const d = diffDays(isoDate);
@@ -75,7 +39,6 @@ function urgencia(isoDate, done) {
   return 'proxima';
 }
 
-/* ── Notificación de tareas vencidas al arrancar ── */
 function checkTareasVencidas(tareas) {
   const vencidas = tareas.filter(t => !t.done && diffDays(t.fecha) < 0);
   if (vencidas.length > 0) {
@@ -83,7 +46,9 @@ function checkTareasVencidas(tareas) {
   }
 }
 
-/* ── CRUD ── */
+/* ════════════════════════════════════════
+   CRUD — con redirección a alertas al crear
+   ════════════════════════════════════════ */
 function addTarea(e) {
   e.preventDefault();
   const f = e.target;
@@ -104,10 +69,14 @@ function addTarea(e) {
     createdAt: todayISO(),
   });
   saveTareas(tareas);
-
   addTareaOpen = false;
-  render();
-  toast('Tarea creada', 'success');
+
+  toast('Tarea creada ✓ — redirigiendo a Alertas...', 'success');
+
+  /* Redirigir a alertas después de 800ms para que se vea el toast */
+  setTimeout(() => {
+    window.location.href = 'alertas.html';
+  }, 800);
 }
 
 function saveEditTarea(e) {
@@ -151,11 +120,56 @@ function delTarea(id) {
   toast('Tarea eliminada', '');
 }
 
+/* ════════════════════════════════════════
+   Crear tarea de ITV desde vehículo
+   ════════════════════════════════════════ */
+function crearTareaITV(carId) {
+  const car = S.cars.find(c => c.id === carId);
+  if (!car) return;
+
+  const tareas = loadTareas();
+
+  /* Evitar duplicados: no crear si ya existe una tarea ITV activa para este vehículo */
+  const yaExiste = tareas.some(t =>
+    !t.done &&
+    t.origenITV === carId
+  );
+  if (yaExiste) {
+    toast('Ya existe una tarea ITV activa para este vehículo', 'error');
+    return;
+  }
+
+  const nombreAuto = `${car.brand} ${car.model} ${car.year}${car.patente ? ' [' + car.patente + ']' : ''}`;
+  const fechaTarea = car.itvVenc || todayISO();
+
+  tareas.unshift({
+    id: uid(),
+    titulo: `⚠️ ITV pendiente — ${nombreAuto}`,
+    descripcion: car.itvVenc
+      ? `La ITV vence el ${car.itvVenc}. Gestionar renovación.`
+      : `ITV vencida o sin fecha de vencimiento cargada. Verificar estado.`,
+    fecha: fechaTarea,
+    clienteId: null,
+    clienteNombre: null,
+    clientePhone: car.duenioContacto || null,
+    creadoPor: getSession().nombre,
+    done: false,
+    createdAt: todayISO(),
+    origenITV: carId,        /* referencia al vehículo */
+    origenLabel: nombreAuto,
+  });
+  saveTareas(tareas);
+
+  toast(`Tarea ITV creada para ${nombreAuto} — redirigiendo a Alertas...`, 'success');
+
+  setTimeout(() => {
+    window.location.href = 'alertas.html';
+  }, 900);
+}
+
 /* ── Formulario ── */
 function rTareaForm(tarea) {
   const edit = !!tarea;
-
-  /* Opciones del selector de clientes (activos primero) */
   const clientesActivos = S.clients.filter(c => c.status === 'activo');
   const clientesInactivos = S.clients.filter(c => c.status !== 'activo');
   const optsActivos = clientesActivos.map(c =>
@@ -171,7 +185,6 @@ function rTareaForm(tarea) {
   <div class="form-section">
     <div class="form-title">${edit ? 'Editar tarea' : 'Nueva tarea'}</div>
     <form onsubmit="${edit ? 'saveEditTarea(event)' : 'addTarea(event)'}">
-
       <div class="hint-box">
         <div class="hint-label">Datos de la tarea</div>
         <div class="fg2">
@@ -189,7 +202,6 @@ function rTareaForm(tarea) {
           <textarea name="descripcion" placeholder="Información adicional sobre la tarea...">${edit && tarea.descripcion ? esc(tarea.descripcion) : ''}</textarea>
         </div>
       </div>
-
       <div class="hint-box">
         <div class="hint-label">Cliente asociado (opcional)</div>
         <div class="fg">
@@ -201,12 +213,12 @@ function rTareaForm(tarea) {
           </select>
         </div>
       </div>
-
       <div style="display:flex;gap:8px;justify-content:flex-end">
         <button type="button" class="btn" onclick="${edit ? 'cancelEditTarea()' : 'addTareaOpen=false;render()'}">Cancelar</button>
-        <button type="submit" class="btn primary">${edit ? 'Guardar cambios' : 'Crear tarea'}</button>
+        <button type="submit" class="btn primary">${edit ? 'Guardar cambios' : 'Crear tarea → Alertas'}</button>
       </div>
     </form>
+    ${!edit ? `<div style="font-size:11px;color:var(--text-3);text-align:right;margin-top:6px">Al crear, se abrirá la sección de Alertas automáticamente</div>` : ''}
   </div>`;
 }
 
@@ -214,8 +226,6 @@ function rTareaForm(tarea) {
 function rTareaItem(t) {
   const urg = urgencia(t.fecha, t.done);
   const label = labelFecha(t.fecha);
-
-  /* Colores según urgencia */
   const colores = {
     vencida: { border: 'var(--red)', bg: 'var(--red-bg)', badge: 'bg-red', icon: '🔴' },
     hoy: { border: 'var(--gold)', bg: 'var(--gold-bg)', badge: 'bg-gold', icon: '🟡' },
@@ -236,6 +246,7 @@ function rTareaItem(t) {
               📅 <strong>${label}</strong>
               · Por <strong>${esc(t.creadoPor)}</strong>
               ${t.clienteNombre ? `· 👤 <strong>${esc(t.clienteNombre)}</strong>` : ''}
+              ${t.origenITV ? `· 🚗 <strong>${esc(t.origenLabel||'Vehículo')}</strong>` : ''}
             </div>
             ${t.descripcion ? `<div style="font-size:12px;color:var(--text-2);margin-top:4px;font-style:italic">"${esc(t.descripcion)}"</div>` : ''}
           </div>
@@ -243,20 +254,18 @@ function rTareaItem(t) {
         </div>
       </div>
     </div>
-
     <div class="sep" style="display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end">
       ${t.clientePhone ? whatsappBtn(t.clientePhone, t.clienteNombre || '', true) : ''}
       ${!t.done
-      ? `<button class="btn sm success" onclick="marcarTarea('${t.id}',true)">✓ Completar</button>`
-      : `<button class="btn sm" onclick="marcarTarea('${t.id}',false)">Reabrir</button>`
-    }
+        ? `<button class="btn sm success" onclick="marcarTarea('${t.id}',true)">✓ Completar</button>`
+        : `<button class="btn sm" onclick="marcarTarea('${t.id}',false)">Reabrir</button>`
+      }
       ${!t.done ? `<button class="btn sm" onclick="editTarea('${t.id}')">Editar</button>` : ''}
       <button class="btn sm danger" onclick="delTarea('${t.id}')">×</button>
     </div>
   </div>`;
 }
 
-/* ── Grupo con encabezado visual ── */
 function rGrupo(titulo, items, colorClass) {
   if (items.length === 0) return '';
   return `
@@ -270,7 +279,6 @@ function rGrupo(titulo, items, colorClass) {
   </div>`;
 }
 
-/* ── Resumen rápido (badges conteo) ── */
 function rResumen(vencidas, hoy, proximas, completadas) {
   let badges = '';
   if (vencidas.length > 0) badges += `<span class="badge bg-red">🔴 ${vencidas.length} vencida${vencidas.length > 1 ? 's' : ''}</span>`;
@@ -281,28 +289,23 @@ function rResumen(vencidas, hoy, proximas, completadas) {
   return `<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:1rem">${badges}</div>`;
 }
 
-/* ── Render principal ── */
 function render() {
   const tareas = loadTareas();
-
-  /* Separar por estado/urgencia */
   const pendientes = tareas.filter(t => !t.done);
   const completadas = tareas.filter(t => t.done);
-
-  /* Ordenar pendientes por fecha MÁS PRÓXIMA primero (vencidas antes = fecha menor) */
   pendientes.sort((a, b) => new Date(a.fecha) - new Date(b.fecha));
-
   const vencidas = pendientes.filter(t => diffDays(t.fecha) < 0);
   const hoy_arr = pendientes.filter(t => diffDays(t.fecha) === 0);
   const proximas = pendientes.filter(t => diffDays(t.fecha) > 0);
-
-  /* Completadas: las más recientes primero */
   completadas.sort((a, b) => new Date(b.fecha) - new Date(a.fecha));
 
   let html = `
   <div class="section-head">
     <div class="section-title">Tareas</div>
-    <button class="btn primary" onclick="addTareaOpen=true;editTareaId=null;render()">+ Nueva tarea</button>
+    <div style="display:flex;gap:6px">
+      <a href="alertas.html" class="btn">🔔 Ver alertas</a>
+      <button class="btn primary" onclick="addTareaOpen=true;editTareaId=null;render()">+ Nueva tarea</button>
+    </div>
   </div>
 
   ${addTareaOpen ? rTareaForm() : ''}
@@ -317,7 +320,6 @@ function render() {
     <button class="btn sm${tareasSort === 'vencimiento' ? ' active' : ''}" onclick="tareasSort='vencimiento';render()">🔴 Vencidas primero</button>
   </div>` : ''}`;
 
-  /* Sin tareas */
   if (tareas.length === 0 && !addTareaOpen) {
     html += `
     <div class="empty">
@@ -329,7 +331,6 @@ function render() {
     return;
   }
 
-  /* Grupos de pendientes — orden según tareasSort */
   if (pendientes.length === 0 && !addTareaOpen) {
     html += `
     <div class="empty">
@@ -338,20 +339,15 @@ function render() {
       <div style="font-size:13px;margin-top:4px">No hay tareas pendientes.</div>
     </div>`;
   } else if (tareasSort === 'vencimiento') {
-    // Modo "vencidas primero": un único listado cronológico (pasado → futuro)
-    const todasPendientes = [...pendientes].sort((a, b) => new Date(a.fecha) - new Date(b.fecha));
     html += rGrupo('🔴 Vencidas', vencidas, 'red');
     html += rGrupo('🟡 Hoy', hoy_arr, 'gold');
     html += rGrupo('🟢 Próximas', proximas, 'green');
-    void todasPendientes; // ya agrupadas arriba en orden cronológico natural
   } else {
-    // Modo "próximas primero": hoy → próximas → vencidas
     html += rGrupo('🟡 Hoy', hoy_arr, 'gold');
     html += rGrupo('🟢 Próximas', proximas, 'green');
     html += rGrupo('🔴 Vencidas', vencidas, 'red');
   }
 
-  /* Completadas en <details> plegable */
   if (completadas.length > 0) {
     html += `
     <details style="margin-top:1.25rem">
@@ -367,7 +363,6 @@ function render() {
   document.getElementById('view').innerHTML = html;
 }
 
-/* ── Boot ── */
 bootApp('tareas');
 checkTareasVencidas(loadTareas());
 render();

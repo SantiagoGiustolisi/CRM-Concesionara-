@@ -64,6 +64,23 @@ function gestoriaBadge(car) {
    Redirige a alertas.html con tipo "Turno" preseleccionado
    ═══════════════════════════════════════════════════════════════ */
  
+function setITVGestoria(carId, status) {
+  const car = S.cars.find(c => c.id === carId);
+  if (!car) return;
+  car.itv = status;
+  if (status === 'si') car.itvVenc = '';
+  save();
+  renderGestoriaModal();
+  renderVehiculosList();
+}
+
+function setITVDateGestoria(carId, date) {
+  const car = S.cars.find(c => c.id === carId);
+  if (!car) return;
+  car.itvVenc = date;
+  save();
+}
+
 function solicitarTurnoDesdeGestoria(carId, itemKey, itemLabel) {
   const car = S.cars.find(c => c.id === carId);
   const contexto = {
@@ -184,7 +201,39 @@ function renderGestoriaModal() {
  
       <!-- Cuerpo scrolleable -->
       <div style="padding:1.25rem 1.75rem;overflow-y:auto;flex:1">
- 
+
+        <!-- Sección ITV -->
+        ${(()=>{
+          const itvOk      = car.itv === 'si';
+          const itvNo      = car.itv === 'no';
+          const dITV       = itvNo && car.itvVenc ? Math.ceil((new Date(car.itvVenc) - new Date()) / (1000*60*60*24)) : null;
+          const itvVencida = dITV !== null && dITV <= 0;
+          const itvProxima = dITV !== null && dITV > 0 && dITV <= 30;
+          const borde      = itvVencida ? 'rgba(224,85,85,0.45)' : itvProxima ? 'rgba(224,144,85,0.4)' : itvOk ? 'rgba(76,175,125,0.3)' : 'var(--border-md)';
+          const fondo      = itvVencida ? 'rgba(224,85,85,0.05)' : itvProxima ? 'rgba(224,144,85,0.05)' : itvOk ? 'rgba(76,175,125,0.04)' : 'var(--surface-2)';
+
+          return `
+        <div style="padding:14px 16px;border-radius:var(--radius);border:1px solid ${borde};background:${fondo};margin-bottom:1.25rem">
+          <div style="font-size:10px;text-transform:uppercase;letter-spacing:.1em;color:var(--text-3);font-weight:600;margin-bottom:10px">
+            🚗 Estado ITV
+          </div>
+          <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+            <button onclick="setITVGestoria('${car.id}','si')" class="btn sm${itvOk?' success':''}"
+              style="${itvOk?'font-weight:700':''}">✓ Al día</button>
+            <button onclick="setITVGestoria('${car.id}','no')" class="btn sm"
+              style="${itvNo?'border-color:var(--red);color:var(--red);font-weight:700':''}">⚠️ Vencida / Pendiente</button>
+            ${itvNo ? `
+            <input type="date" value="${car.itvVenc||''}" onchange="setITVDateGestoria('${car.id}',this.value)"
+              style="font-size:12px;padding:5px 9px;border:1px solid var(--border-md);border-radius:var(--radius-sm);background:var(--surface);color:var(--text);font-family:var(--font)">
+            <button onclick="solicitarTurnoITV('${car.id}')" class="btn sm"
+              style="border-color:var(--gold-border);color:var(--gold)">📅 Solicitar turno ITV</button>
+            ` : ''}
+          </div>
+          ${itvVencida ? `<div style="font-size:11px;color:var(--red);margin-top:8px">⚠️ ITV vencida hace ${Math.abs(dITV)} día${Math.abs(dITV)>1?'s':''}.</div>` : ''}
+          ${itvProxima ? `<div style="font-size:11px;color:var(--orange);margin-top:8px">⏳ Vence en ${dITV} día${dITV>1?'s':''}.</div>` : ''}
+        </div>`;
+        })()}
+
         <!-- Título checklist -->
         <div style="font-size:10px;text-transform:uppercase;letter-spacing:.1em;color:var(--text-3);font-weight:600;margin-bottom:10px">
           Documentación requerida &nbsp;·&nbsp; <span style="color:var(--text-3);font-weight:400;text-transform:none;letter-spacing:0">hacé clic en cada ítem para marcarlo</span>
