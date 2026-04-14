@@ -143,7 +143,7 @@
     function doLogin() {
       const u = document.getElementById('uname').value.trim().toLowerCase();
       const p = document.getElementById('upass').value;
-      const found = USERS.find(x => x.user === u && x.pass === p);
+      const found = USERS.find(x => x.user.toLowerCase() === u && x.pass === p);
       if (found) {
         localStorage.setItem('crm_session', JSON.stringify({
           user: found.user, role: found.role, nombre: found.nombre, ts: Date.now()
