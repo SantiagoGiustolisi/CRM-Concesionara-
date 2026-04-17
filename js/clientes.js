@@ -9,6 +9,7 @@ let editClientId  = null;
 function addClient(e) {
   e.preventDefault();
   const f = e.target;
+  const tieneAuto = f.tieneAutoEntrega && f.tieneAutoEntrega.value === 'si';
   S.clients.unshift({
     id: uid(),
     name:        f.cname.value.trim(),
@@ -27,6 +28,17 @@ function addClient(e) {
     notes:       f.notes.value.trim(),
     status:      'activo',
     date:        today(),
+    /* Auto a entregar */
+    tieneAutoEntrega: tieneAuto,
+    autoEntrega: tieneAuto ? {
+      brand:   f.aeBrand  ? f.aeBrand.value.trim()  : '',
+      model:   f.aeModel  ? f.aeModel.value.trim()  : '',
+      year:    f.aeYear   ? +f.aeYear.value          : null,
+      km:      f.aeKm     ? +f.aeKm.value            : null,
+      color:   f.aeColor  ? f.aeColor.value.trim()  : '',
+      trans:   f.aeTrans  ? f.aeTrans.value          : '',
+      notas:   f.aeNotas  ? f.aeNotas.value.trim()  : '',
+    } : null,
   });
   addClientOpen = false;
   checkBirthdayAlerts();
@@ -57,6 +69,17 @@ function saveEditClient(e) {
   cl.notes       = f.notes.value.trim();
   cl.editadoPor  = getSession().nombre;
   cl.fechaEdicion = todayISO();
+  const tieneAutoE = f.tieneAutoEntrega && f.tieneAutoEntrega.value === 'si';
+  cl.tieneAutoEntrega = tieneAutoE;
+  cl.autoEntrega = tieneAutoE ? {
+    brand:  f.aeBrand  ? f.aeBrand.value.trim()  : '',
+    model:  f.aeModel  ? f.aeModel.value.trim()  : '',
+    year:   f.aeYear   ? +f.aeYear.value          : null,
+    km:     f.aeKm     ? +f.aeKm.value            : null,
+    color:  f.aeColor  ? f.aeColor.value.trim()  : '',
+    trans:  f.aeTrans  ? f.aeTrans.value          : '',
+    notas:  f.aeNotas  ? f.aeNotas.value.trim()  : '',
+  } : null;
 
   /* Si se cargó o cambió el cumpleaños, actualizar la alerta */
   if (cl.fechaCumple && cl.fechaCumple !== cumpleAnterior) {
@@ -228,6 +251,65 @@ function rClientForm(cl) {
         <div class="fg"><label>Notas adicionales</label><textarea name="notes" placeholder="Quiere color oscuro, necesita 4x4, urgente...">${edit&&cl.notes?esc(cl.notes):''}</textarea></div>
       </div>
 
+      <div class="hint-box">
+        <div class="hint-label">¿Tiene auto para entregar?</div>
+        <div class="fg">
+          <label>¿Entrega un auto?</label>
+          <select name="tieneAutoEntrega" id="tieneAutoEntregaSel"
+            onchange="document.getElementById('autoEntregaWrap').style.display=this.value==='si'?'block':'none'">
+            <option value="no"${edit&&cl&&cl.tieneAutoEntrega?'':' selected'}>No</option>
+            <option value="si"${edit&&cl&&cl.tieneAutoEntrega?' selected':''}>Sí — tiene auto para entregar</option>
+          </select>
+        </div>
+        <div id="autoEntregaWrap" style="display:${edit&&cl&&cl.tieneAutoEntrega?'block':'none'};margin-top:12px">
+          <div style="font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--text-3);margin-bottom:10px">
+            Datos del auto a entregar
+          </div>
+          <div class="fg3">
+            <div class="fg">
+              <label>Marca</label>
+              <input type="text" name="aeBrand" placeholder="Ford, Fiat..." list="ml-ae"
+                value="${edit&&cl&&cl.autoEntrega?esc(cl.autoEntrega.brand):''}">
+              <datalist id="ml-ae">${MARCAS.map(m=>`<option value="${m}">`).join('')}</datalist>
+            </div>
+            <div class="fg">
+              <label>Modelo</label>
+              <input type="text" name="aeModel" placeholder="Ka, Cronos, Corsa..."
+                value="${edit&&cl&&cl.autoEntrega?esc(cl.autoEntrega.model):''}">
+            </div>
+            <div class="fg">
+              <label>Año</label>
+              <input type="number" name="aeYear" placeholder="2018" min="1990" max="2030"
+                value="${edit&&cl&&cl.autoEntrega&&cl.autoEntrega.year?cl.autoEntrega.year:''}">
+            </div>
+          </div>
+          <div class="fg3">
+            <div class="fg">
+              <label>Kilometraje</label>
+              <input type="number" name="aeKm" placeholder="80000" min="0"
+                value="${edit&&cl&&cl.autoEntrega&&cl.autoEntrega.km?cl.autoEntrega.km:''}">
+            </div>
+            <div class="fg">
+              <label>Color</label>
+              <input type="text" name="aeColor" placeholder="Blanco, Rojo..."
+                value="${edit&&cl&&cl.autoEntrega?esc(cl.autoEntrega.color):''}">
+            </div>
+            <div class="fg">
+              <label>Transmisión</label>
+              <select name="aeTrans">
+                <option value="">— cualquiera —</option>
+                <option value="manual"${edit&&cl&&cl.autoEntrega&&cl.autoEntrega.trans==='manual'?' selected':''}>Manual</option>
+                <option value="automático"${edit&&cl&&cl.autoEntrega&&cl.autoEntrega.trans==='automático'?' selected':''}>Automático</option>
+              </select>
+            </div>
+          </div>
+          <div class="fg">
+            <label>Observaciones del auto</label>
+            <textarea name="aeNotas" placeholder="Estado general, detalles, historial...">${edit&&cl&&cl.autoEntrega?esc(cl.autoEntrega.notas):''}</textarea>
+          </div>
+        </div>
+      </div>
+
       <div style="display:flex;gap:8px;justify-content:flex-end">
         <button type="button" class="btn" onclick="${edit?'cancelEdit()':'addClientOpen=false;render()'}">Cancelar</button>
         <button type="submit" class="btn primary">${edit?'Guardar cambios':'Guardar cliente'}</button>
@@ -280,11 +362,26 @@ function render() {
             <div style="display:flex;gap:5px;flex-wrap:wrap;align-items:center">
               ${ms.length>0?`<span class="badge bg-green">${ms.length} auto${ms.length>1?'s':''} disponible${ms.length>1?'s':''}</span>`:''}
               ${bdToday?'<span class="badge bg-purple">🎉 Cumpleaños</span>':''}
+              ${c.tieneAutoEntrega?'<span class="badge bg-orange">🚗 Entrega auto</span>':''}
               <span class="badge bg-blue">Activo</span>
             </div>
           </div>
           <div style="margin-top:8px">${rTags(c)}</div>
           ${c.notes?`<div style="font-size:12px;color:var(--text-2);margin-top:6px;font-style:italic">"${esc(c.notes)}"</div>`:''}
+          ${c.tieneAutoEntrega&&c.autoEntrega?`
+          <div style="margin-top:8px;padding:8px 10px;background:var(--surface-2);border-radius:6px;border:1px solid var(--border);border-left:3px solid var(--orange)">
+            <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--text-3);margin-bottom:4px">🚗 Auto para entregar</div>
+            <div style="font-size:13px;font-weight:500;color:var(--text-1)">
+              ${c.autoEntrega.brand?esc(c.autoEntrega.brand)+' ':''} ${c.autoEntrega.model?esc(c.autoEntrega.model):''}
+              ${c.autoEntrega.year?`<span style="color:var(--text-3)">${c.autoEntrega.year}</span>`:''}
+            </div>
+            <div style="font-size:12px;color:var(--text-2);margin-top:2px">
+              ${c.autoEntrega.km?fk(c.autoEntrega.km)+' km':''}
+              ${c.autoEntrega.trans?' · '+c.autoEntrega.trans:''}
+              ${c.autoEntrega.color?' · '+esc(c.autoEntrega.color):''}
+            </div>
+            ${c.autoEntrega.notas?`<div style="font-size:11px;color:var(--text-3);margin-top:3px;font-style:italic">"${esc(c.autoEntrega.notas)}"</div>`:''}
+          </div>`:''} 
 
           ${ms.length>0?`
           <div class="sep">
